@@ -1,0 +1,25 @@
+# .NET build outputs and IDE files
+**/bin/
+**/obj/
+.vs/
+*.user
+*.suo
+
+# Python virtual environments, caches, and test artifacts
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Local environment settings
+.env
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
