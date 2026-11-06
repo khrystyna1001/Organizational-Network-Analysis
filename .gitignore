@@ -1,9 +1,29 @@
 # .NET build outputs and IDE files
 **/bin/
 **/obj/
+**/TestResults/
+**/artifacts/
 .vs/
+.idea/
 *.user
 *.suo
+*.userosscache
+*.sln.docstates
+*.log
+*.tmp
+*.swp
+*.swo
+Thumbs.db
+
+# NuGet package cache when generated in a project directory
+**/packages/
+
+# Coverage and benchmark output
+coverage/
+coverage.*
+*.coverage
+*.coveragexml
+BenchmarkDotNet.Artifacts/
 
 # Python virtual environments, caches, and test artifacts
 .venv/
