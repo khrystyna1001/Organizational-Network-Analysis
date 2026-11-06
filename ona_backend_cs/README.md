@@ -1,10 +1,12 @@
 # ONA: Organization Network Analyzer
 
-ONA is a .NET 10 solution for exploring organizational structures and networks. The current implementation provides an in-memory Graph API and an Organization API for importing CSV data. Analysis and Insights are scaffolds and do not yet expose business endpoints.
+ONA is a .NET 10 solution for exploring organizational structures and networks. The solution separates the Event Storming workflow into bounded contexts. The current implementation provides an in-memory Graph API and an Organization API for importing CSV data; Identity, Analysis, and Insights are architectural scaffolds without business workflows.
 
 ## Contents
 
 - [Architecture](#architecture)
+- [Event Storming workflow and integration boundaries](#event-storming-workflow-and-integration-boundaries)
+- [Architecture status and decisions](#architecture-status-and-decisions)
 - [Requirements](#requirements)
 - [Build and test](#build-and-test)
 - [Run the services](#run-the-services)
@@ -16,33 +18,75 @@ ONA is a .NET 10 solution for exploring organizational structures and networks. 
 
 ## Architecture
 
-The solution is organized by bounded context under `src/Services`:
+The solution is organized by bounded context under `src/Services`. Each service follows inward dependency direction:
+
+```text
+Presentation -> Application -> Domain
+Presentation -> Infrastructure -> Application
+```
+
+`Domain` contains business rules and has no external package or project dependencies. `Application` defines use cases and ports; `Infrastructure` implements external adapters (persistence, identity, LLM); `Presentation` hosts HTTP APIs and composes the service. Bounded contexts must not reference another context's projects. Integrations between contexts are planned through versioned messages/API contracts, not direct code dependencies.
+
+The current and target project layout is:
 
 ```text
 src/Services/
+├── Identity/
+│   ├── ONA.Identity.Domain/         # User registration and identity business rules (scaffold)
+│   ├── ONA.Identity.Application/    # Registration use cases and identity-provider ports (scaffold)
+│   ├── ONA.Identity.Infrastructure/# External OAuth/identity adapters (future)
+│   └── ONA.Identity.Presentation/   # Identity API host (no business endpoints yet)
 ├── Graph/
 │   ├── ONA.Graph.Domain/          # Board aggregate, Node/Connection entities, domain rules
 │   ├── ONA.Graph.Application/     # IGraphService, DTOs, IBoardRepository
-│   ├── ONA.Graph.Infrastructure/  # In-memory graph store and repository
+│   ├── ONA.Graph.Infrastructure/  # Current in-memory store; future MySQL persistence
 │   └── ONA.Graph.Presentation/    # ASP.NET Core controllers, middleware, OpenAPI
 ├── Organization/
 │   ├── ONA.Organization.Domain/         # Reserved for organization domain rules
 │   ├── ONA.Organization.Application/    # CSV reader interface and import service
-│   ├── ONA.Organization.Infrastructure/ # CSV parsing implementation
+│   ├── ONA.Organization.Infrastructure/ # CSV parsing; future MySQL persistence
 │   └── ONA.Organization.Presentation/   # CSV upload endpoint and OpenAPI
 ├── Analysis/
 │   ├── ONA.Analysis.Domain/
 │   ├── ONA.Analysis.Application/
-│   └── ONA.Analysis.Presentation/ # Scaffold; no business endpoints yet
+│   ├── ONA.Analysis.Infrastructure/ # Future graph-data adapter and analysis persistence
+│   └── ONA.Analysis.Presentation/  # Scaffold; no business endpoints yet
 └── Insights/
     ├── ONA.Insights.Domain/
     ├── ONA.Insights.Application/
-    └── ONA.Insights.Presentation/ # Scaffold; no business endpoints yet
+    ├── ONA.Insights.Infrastructure/ # Future LLM provider and recommendation persistence
+    └── ONA.Insights.Presentation/  # Scaffold; no business endpoints yet
 ```
 
-Each running API is its own ASP.NET Core application and composition root. Dependencies point inward: Application depends on Domain, Infrastructure implements Application abstractions, and Presentation wires the services together. The Graph API uses controller-based endpoints and maps domain errors to Problem Details.
+Each Presentation application is its own ASP.NET Core host and composition root. Graph and Organization have implemented business endpoints. Identity has an API host only; Analysis and Insights have API scaffolds only.
 
-Graph data is held in a process-local `ConcurrentDictionary`; boards, nodes, and connections are lost when the Graph process stops. The Organization API parses each uploaded CSV in memory and does not persist the import.
+### Event Storming workflow and integration boundaries
+
+| Bounded context | Event Storming commands and events | Architectural responsibility |
+| --- | --- | --- |
+| **Identity** | `Register User` → `Registered` | Own registration/account lifecycle and adapt the external OAuth/authorization system. The board's invalid-credentials parallel event belongs here. |
+| **Organization** | `Import Hierarchy` → `Organization Hierarchy Imported`; `Ingest Communication Logs` → `Communication Logs Ingested` / `Communication Logs Processed` | Validate imports, normalize organization/communication data, and apply an agreed privacy policy before persisting or publishing data. |
+| **Graph** | `Build Network Graph` → `Network Graph Built`; `Update Network Graph` → `Communication Channels Optimized` and `Graph Version Saved` | Own the graph aggregate and its version history. Build/update from accepted organization data; do not make Identity, Analysis, or Insights depend directly on Graph project types. |
+| **Analysis** | `Run Graph Analysis` → `Metrics Calculated`; `Calculate Metrics` → `Metrics Updated`; `Detect Bottlenecks` → `Management Bottlenecks Identified` | Consume a graph snapshot/version and produce deterministic metrics and bottleneck findings. |
+| **Insights** | `Generate Insights` → `LLM Insight Generated`; `Deliver a Recommendation` → `Recommendation Delivered`; `Respond to LLM` → `User Response` | Combine analysis results with an LLM provider, present recommendations, and record user feedback/decisions. |
+
+`Registration Form`, `Ingestion Status Dashboard`, `Network Graph View`, `Bottleneck Dashboard`, `LLM Insight Summary Card`, and `Response Card` are read models/UI responsibilities; they are not domain entities or server-side pages in these API projects.
+
+The intended cross-context flow is **Identity registration → Organization imports → Graph build/version → Analysis metrics and bottlenecks → Insights recommendation and user response → approved Graph update**. Integration should use versioned events or explicit API contracts and include the graph/import version so Analysis and Insights can identify the data they evaluated. The event broker is not selected or implemented yet.
+
+### Architecture status and decisions
+
+| Concern | Current state | Target architecture / decision |
+| --- | --- | --- |
+| Persistence | Graph uses a process-local `ConcurrentDictionary`; Organization parses each uploaded CSV in memory and does not persist it. | **MySQL is selected** as the target relational database. Each bounded context should own its own database/schema and migrations, even if they initially share a MySQL server. No EF Core provider, connection string, `DbContext`, or persistent repository is configured yet. |
+| Authentication | No user registration or authentication logic is implemented. | Keep identity-provider integration behind Identity Infrastructure. Provider and registration ownership remain deferred; do not store credentials until the provider/security design is chosen. |
+| LLM | No LLM calls or recommendation behavior is implemented. | Keep the provider behind an Insights Application port and Infrastructure adapter. Provider selection and credentials remain deferred. |
+| Communication privacy | The CSV endpoint currently returns parsed values and does not ingest communication logs as a distinct workflow. | Decide how to remove/anonymize message content while retaining necessary flow metadata before implementing ingestion. |
+| Graph refresh | No graph import/rebuild workflow exists. | Decide between real-time and scheduled/batch graph updates. Keep the trigger/scheduling mechanism outside the Graph domain model. |
+| Metrics and LLM quality | Metrics, bottleneck detection, and LLM evaluation are not implemented. | Define how administrative-task activity is excluded from bottleneck signals and how the system detects LLM misinterpretation of graph metrics. Treat analysis results as authoritative inputs; recommendations should retain provenance to the graph version and metrics used. |
+| Recommendation response | No user-response workflow or graph version history exists. | Record response/decision and preserve prior graph versions. Only an explicit approved change should lead to a Graph update; whether disagreement triggers a new recommendation or ends the workflow is still a domain decision. |
+
+The Analysis, Insights, and Identity Infrastructure projects are empty architectural seams, not functioning adapters. MySQL and external providers can be added there without adding dependencies to Domain or references between bounded contexts.
 
 ## Requirements
 
@@ -77,6 +121,9 @@ dotnet run --project src/Services/Analysis/ONA.Analysis.Presentation/ONA.Analysi
 
 # Insights scaffold
 dotnet run --project src/Services/Insights/ONA.Insights.Presentation/ONA.Insights.Presentation.csproj --launch-profile http
+
+# Identity scaffold
+dotnet run --project src/Services/Identity/ONA.Identity.Presentation/ONA.Identity.Presentation.csproj --launch-profile http
 ```
 
 Run services in separate terminals. Each service has distinct HTTP and HTTPS ports. To use the HTTPS profile instead, replace `--launch-profile http` with `--launch-profile https`.
@@ -89,6 +136,7 @@ Run services in separate terminals. Each service has distinct HTTP and HTTPS por
 | Organization | `http://localhost:5025` | `https://localhost:7197` | `/scalar/v1` | `/openapi/v1.json` |
 | Analysis | `http://localhost:5139` | `https://localhost:7134` | `/scalar/v1` | `/openapi/v1.json` |
 | Insights | `http://localhost:5095` | `https://localhost:7144` | `/scalar/v1` | `/openapi/v1.json` |
+| Identity | `http://localhost:5187` | `https://localhost:7187` | `/scalar/v1` | `/openapi/v1.json` |
 
 OpenAPI and Scalar routes are enabled only in the Development environment. The Graph API health endpoint is `GET http://localhost:5056/` and returns a small JSON status response.
 
@@ -206,9 +254,9 @@ The response contains an import status, row count, and records. Record propertie
 
 The exact record shape depends on the uploaded file's CSV headers.
 
-### Analysis and Insights
+### Identity, Analysis, and Insights
 
-These services currently expose no business controllers or API routes. Their `/openapi/v1.json` documents and `/scalar/v1` explorers are available, but contain no application endpoints yet.
+These services currently expose no business controllers or API routes. Their `/openapi/v1.json` documents and `/scalar/v1` explorers are available, but contain no application endpoints yet. Identity is reserved for registration and the future external identity-provider integration; Analysis and Insights are reserved for metrics/bottlenecks and LLM/recommendation workflows, respectively.
 
 ## Model schema and interface documentation
 

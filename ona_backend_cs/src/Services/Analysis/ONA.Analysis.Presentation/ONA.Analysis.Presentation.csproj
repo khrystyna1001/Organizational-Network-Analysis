@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ONA.Analysis.Application\ONA.Analysis.Application.csproj" />
+    <ProjectReference Include="..\ONA.Analysis.Infrastructure\ONA.Analysis.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
