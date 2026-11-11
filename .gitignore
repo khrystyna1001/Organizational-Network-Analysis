@@ -40,6 +40,14 @@ htmlcov/
 .env
 .env.*
 !.env.example
+!.env.*.example
+
+# Per-developer .NET configuration overrides
+**/appsettings.Local.json
+**/appsettings.Development.json
+**/appsettings.*.Local.json
+**/appsettings.*.Development.json
+**/Properties/launchSettings.Local.json
 
 # macOS
 .DS_Store

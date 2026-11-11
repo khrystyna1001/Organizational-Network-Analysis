@@ -8,6 +8,10 @@ public interface IGraphService
         CreateBoardDto input,
         CancellationToken cancellationToken = default);
 
+    Task<ImportedBoardDto> CreateBoardFromImportAsync(
+        ImportBoardDto input,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<BoardDto>> GetBoardsAsync(
         CancellationToken cancellationToken = default);
 
