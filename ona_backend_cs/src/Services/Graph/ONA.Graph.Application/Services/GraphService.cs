@@ -29,8 +29,8 @@ public sealed class GraphService(IBoardRepository repository) : IGraphService
             throw new InvalidBoardImportException("CSV must contain at least one employee row.");
         }
 
-        var organizationNetwork = new OrganizationNetwork(input.Employees);
-        organizationNetwork.CreateGraphFromEmployees();
+        // var organizationNetwork = new OrganizationNetwork(input.Employees);
+        // organizationNetwork.CreateGraphFromEmployees();
 
         var employeeIds = new HashSet<string>(StringComparer.Ordinal);
         for (var index = 0; index < input.Employees.Count; index++)

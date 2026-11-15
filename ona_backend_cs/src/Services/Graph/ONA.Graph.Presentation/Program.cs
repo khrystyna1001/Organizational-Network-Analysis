@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using ONA.Graph.Application.DTOs;
 using ONA.Graph.Application.Services;
 using ONA.Graph.Infrastructure;
+using ONA.Graph.Infrastructure.Persistence.Seeders;
 using ONA.Graph.Presentation.Middleware;
 using Microsoft.VisualBasic.FileIO;
 using Scalar.AspNetCore;
@@ -30,6 +31,12 @@ var graphConnectionString = builder.Configuration.GetConnectionString("Graph")
 builder.Services.AddInfrastructure(graphConnectionString);
 
 var app = builder.Build();
+
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var seeder = scope.ServiceProvider.GetRequiredService<GraphDbContextSeeder>();
+    await seeder.SeedAsync();
+}
 
 if (app.Environment.IsDevelopment())
 {
