@@ -1,13 +1,24 @@
+using ONA.Graph.Domain.Aggregates;
+
 namespace ONA.Graph.Application.DTOs;
 
 /// <summary>Board data returned by the Graph API.</summary>
-public sealed record BoardDto(string Id, string Name, string? Description);
-
-/// <summary>Board fields supplied when creating a board.</summary>
-public sealed record CreateBoardDto(string? Name, string? Description);
-
-/// <summary>Optional board fields supplied when updating a board.</summary>
-public sealed record UpdateBoardDto(
-    string? Name,
+public sealed record BoardDto(
+    string Id,
+    string Name,
     string? Description,
-    bool DescriptionSpecified);
+    string Lifecycle = nameof(BoardLifecycle.Draft),
+    string? CurrentGraphVersionId = null,
+    int NodeCount = 0,
+    int ConnectionCount = 0)
+{
+    public static BoardDto FromDomain(Board board) =>
+        new(
+            board.Id,
+            board.Name,
+            board.Description,
+            board.Lifecycle.ToString(),
+            board.CurrentGraphVersionId,
+            board.Nodes.Count,
+            board.Connections.Count);
+}

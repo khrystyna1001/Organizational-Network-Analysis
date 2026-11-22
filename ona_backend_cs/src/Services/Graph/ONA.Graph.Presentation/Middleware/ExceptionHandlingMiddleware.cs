@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using ONA.Graph.Application.Ports;
 using ONA.Graph.Domain.Exceptions;
 using System.Runtime.ExceptionServices;
 using System.Text.Json;
@@ -44,6 +45,27 @@ public sealed class ExceptionHandlingMiddleware(
                 exception,
                 StatusCodes.Status422UnprocessableEntity,
                 logger);
+        }
+        catch (HrisIntegrationException exception)
+        {
+            // Technical failure of the HRIS export (unreadable/malformed file) -> client error.
+            logger.LogWarning(exception, "HRIS export could not be processed.");
+            if (context.Response.HasStarted)
+            {
+                throw;
+            }
+
+            context.Response.Clear();
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await WriteProblemAsync(
+                context,
+                new ProblemDetails
+                {
+                    Status = StatusCodes.Status400BadRequest,
+                    Title = "The uploaded HRIS export could not be read.",
+                    Detail = exception.Message,
+                    Instance = context.Request.Path
+                });
         }
         catch (Exception exception)
         {

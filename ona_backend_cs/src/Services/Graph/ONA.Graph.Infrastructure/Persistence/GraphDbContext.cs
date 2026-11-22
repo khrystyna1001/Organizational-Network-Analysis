@@ -4,7 +4,7 @@ using ONA.Graph.Domain.Entities;
 
 namespace ONA.Graph.Infrastructure.Persistence;
 
-public sealed class GraphDbContext(DbContextOptions<GraphDbContext> options) : DbContext(options)
+internal sealed class GraphDbContext(DbContextOptions<GraphDbContext> options) : DbContext(options)
 {
     public DbSet<Board> Boards => Set<Board>();
 
@@ -25,6 +25,14 @@ public sealed class GraphDbContext(DbContextOptions<GraphDbContext> options) : D
             entity.Property(board => board.Description)
                 .HasColumnName("description")
                 .HasColumnType("text");
+            entity.Property(board => board.Lifecycle)
+                .HasColumnName("lifecycle")
+                .HasConversion<string>()
+                .HasMaxLength(32)
+                .IsRequired();
+            entity.Property(board => board.CurrentGraphVersionId)
+                .HasColumnName("current_graph_version_id")
+                .HasMaxLength(36);
 
             entity.HasMany<Node>(nameof(Board.Nodes))
                 .WithOne()

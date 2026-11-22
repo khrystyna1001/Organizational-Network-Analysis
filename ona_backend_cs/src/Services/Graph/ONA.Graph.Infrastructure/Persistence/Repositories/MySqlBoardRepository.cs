@@ -13,11 +13,27 @@ internal sealed class MySqlBoardRepository(GraphDbContext dbContext) : IBoardRep
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
+    // Write path: tracked aggregate (no AsNoTracking) with child collections included.
     public async Task<Board?> GetByIdAsync(
         string id,
         CancellationToken cancellationToken = default) =>
         await WithGraph(dbContext.Boards)
             .SingleOrDefaultAsync(board => board.Id == id, cancellationToken);
+
+    public async Task<Board?> GetByIdReadOnlyAsync(
+        string id,
+        CancellationToken cancellationToken = default) =>
+        await WithGraph(dbContext.Boards)
+            .AsNoTracking()
+            .SingleOrDefaultAsync(board => board.Id == id, cancellationToken);
+
+    public async Task AddAsync(
+        Board board,
+        CancellationToken cancellationToken = default)
+    {
+        dbContext.Boards.Add(board);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
 
     public async Task SaveAsync(
         Board board,
@@ -64,21 +80,12 @@ internal sealed class MySqlBoardRepository(GraphDbContext dbContext) : IBoardRep
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<bool> DeleteAsync(
-        string id,
+    public async Task DeleteAsync(
+        Board board,
         CancellationToken cancellationToken = default)
     {
-        var board = await WithGraph(dbContext.Boards)
-            .SingleOrDefaultAsync(board => board.Id == id, cancellationToken);
-
-        if (board is null)
-        {
-            return false;
-        }
-
         dbContext.Boards.Remove(board);
         await dbContext.SaveChangesAsync(cancellationToken);
-        return true;
     }
 
     private static IQueryable<Board> WithGraph(IQueryable<Board> boards) =>

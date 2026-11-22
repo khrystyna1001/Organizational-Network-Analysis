@@ -1,5 +1,6 @@
 using ONA.Graph.Domain.Entities;
 using ONA.Graph.Domain.Exceptions;
+using ONA.Graph.Domain.ValueObjects;
 
 namespace ONA.Graph.Domain.Aggregates;
 
@@ -12,6 +13,10 @@ public sealed class Board
     public string Id { get; }
     public string Name { get; private set; }
     public string? Description { get; private set; }
+    public BoardLifecycle Lifecycle { get; private set; } = BoardLifecycle.Draft;
+    public string? CurrentGraphVersionId { get; private set; }
+
+    private IBoardState State => BoardStates.For(Lifecycle);
 
     public IReadOnlyCollection<Node> Nodes
     {
@@ -42,34 +47,76 @@ public sealed class Board
             throw new InvalidBoardIdException(id);
         }
 
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            throw new InvalidBoardException(name);
-        }
-
         Id = id;
-        Name = name;
+        Name = new BoardName(name).Value;
         Description = description;
     }
 
     public void UpdateDetails(string? name, string? description)
     {
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            throw new InvalidBoardException(name);
-        }
+        var boardName = new BoardName(name);
 
         lock (_sync)
         {
-            Name = name;
+            Name = boardName.Value;
             Description = description;
         }
+    }
+
+    /// <summary>Draft -> Built. Requires at least one node (stateDiagram-analysis.md).</summary>
+    public void BuildNetworkGraph()
+    {
+        lock (_sync)
+        {
+            Lifecycle = State.Build(this);
+        }
+    }
+
+    /// <summary>Built -> Published. Saves a new immutable GraphVersion identifier.</summary>
+    public string PublishGraphVersion()
+    {
+        lock (_sync)
+        {
+            var next = State.Publish(this);
+            CurrentGraphVersionId = Guid.NewGuid().ToString();
+            Lifecycle = next;
+            return CurrentGraphVersionId;
+        }
+    }
+
+    /// <summary>Published -> Archived (terminal state).</summary>
+    public void Archive()
+    {
+        lock (_sync)
+        {
+            Lifecycle = State.Archive(this);
+        }
+    }
+
+    /// <summary>
+    /// Delete guard: a Published board is in use by analysis consumers and must be archived
+    /// before it can be removed.
+    /// </summary>
+    public void EnsureCanBeDeleted()
+    {
+        if (!State.AllowsDeletion)
+        {
+            throw new BoardDeletionNotAllowedException(Id, Lifecycle);
+        }
+    }
+
+    public Node AddNode(NodeName name, string? title, DepartmentName department)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(department);
+        return AddNode(name.Value, title, department.Value);
     }
 
     public Node AddNode(string? name, string? title, string? department)
     {
         lock (_sync)
         {
+            EnsureGraphIsEditable();
             var node = new Node(Guid.NewGuid().ToString(), Id, name, title, department);
             _nodes.Add(node);
             return node;
@@ -84,6 +131,7 @@ public sealed class Board
     {
         lock (_sync)
         {
+            EnsureGraphIsEditable();
             var node = _nodes.FirstOrDefault(item => item.Id == nodeId);
             if (node is null)
             {
@@ -99,6 +147,7 @@ public sealed class Board
     {
         lock (_sync)
         {
+            EnsureGraphIsEditable();
             var removed = _nodes.RemoveAll(node => node.Id == nodeId) > 0;
             if (removed)
             {
@@ -126,6 +175,7 @@ public sealed class Board
     {
         lock (_sync)
         {
+            EnsureGraphIsEditable();
             ValidateWeight(weight);
             RequireNode(sourceNodeId);
             RequireNode(targetNodeId);
@@ -157,6 +207,7 @@ public sealed class Board
     {
         lock (_sync)
         {
+            EnsureGraphIsEditable();
             var connection = _connections.FirstOrDefault(item => item.Id == connectionId);
             if (connection is null)
             {
@@ -173,6 +224,7 @@ public sealed class Board
     {
         lock (_sync)
         {
+            EnsureGraphIsEditable();
             return _connections.RemoveAll(connection => connection.Id == connectionId) > 0;
         }
     }
@@ -182,6 +234,14 @@ public sealed class Board
         lock (_sync)
         {
             return _connections.FirstOrDefault(connection => connection.Id == connectionId);
+        }
+    }
+
+    private void EnsureGraphIsEditable()
+    {
+        if (!State.AllowsGraphMutation)
+        {
+            throw new PublishedGraphMutationNotAllowedException(Id, Lifecycle);
         }
     }
 

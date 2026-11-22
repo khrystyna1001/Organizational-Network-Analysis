@@ -25,7 +25,7 @@ public sealed class MySqlDatabaseFixture : IAsyncLifetime
         await context.Database.MigrateAsync();
     }
 
-    public GraphDbContext CreateDbContext()
+    internal GraphDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<GraphDbContext>()
             .UseMySQL(ConnectionString)

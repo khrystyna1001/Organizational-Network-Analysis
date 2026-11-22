@@ -1,5 +1,7 @@
 # ADR-003: Keep CSV import in the Graph service
 
+> **Update (Lab 5):** CSV parsing moved from `Program.cs` to the Anti-Corruption Layer in `ONA.Graph.Infrastructure/Acl` (see `context-map.md`). The route `POST /api/v1/data` is unchanged.
+
 * **Status:** Accepted
 * **Date:** 2026-11-10
 * **Project context:** ONA Graph API

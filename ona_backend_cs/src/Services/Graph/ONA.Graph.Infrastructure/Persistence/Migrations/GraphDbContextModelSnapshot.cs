@@ -25,9 +25,20 @@ namespace ONA.Graph.Infrastructure.Persistence.Migrations
                         .HasColumnType("varchar(36)")
                         .HasColumnName("id");
 
+                    b.Property<string>("CurrentGraphVersionId")
+                        .HasMaxLength(36)
+                        .HasColumnType("varchar(36)")
+                        .HasColumnName("current_graph_version_id");
+
                     b.Property<string>("Description")
                         .HasColumnType("text")
                         .HasColumnName("description");
+
+                    b.Property<string>("Lifecycle")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)")
+                        .HasColumnName("lifecycle");
 
                     b.Property<string>("Name")
                         .IsRequired()

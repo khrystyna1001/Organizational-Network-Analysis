@@ -1,5 +1,7 @@
 # Value Objects and strongly typed identifiers
 
+Implemented: `BoardName`, `NodeName`, `DepartmentName` (`Domain/ValueObjects`).
+
 | Value Object | Component attributes and types | Hard self-validation at creation | Example immutable domain operation |
 | --- | --- | --- | --- |
 | `BoardName` | `Value: string` | Reject `null`, `""`, or any string consisting only of whitespace. Other strings, including those with leading or trailing whitespace, are accepted unchanged. | `RenameTo(string value)` returns `new BoardName(value)`; it rejects the same inputs as construction. |
@@ -23,7 +25,7 @@
 
 ### Planned workflow and ownership
 
-The current Graph CSV endpoint is a limited first step: it validates the employee schema, creates and persists a Board with employee nodes and supervisor connections, and returns the parsed rows plus generated IDs/counts. It does not persist the original import batch as an `OrganizationImport`, process communication logs, or create a versioned `GraphVersion`.
+The current Graph CSV endpoint (`POST /api/v1/data` → `ImportBoardFromHrisCommand` → `IEmployeeDirectoryPort` ACL) is a limited first step: it validates the employee schema, creates and persists a Draft Board with employee nodes and supervisor connections, and returns the parsed rows plus generated IDs/counts. It does not persist the original import batch as an `OrganizationImport`, process communication logs, or create a versioned `GraphVersion`.
 
 1. **Identity:** `Register User` creates a `User` with a `UserId`; external identity-provider details are linked through Identity and do not replace the domain identifier.
 2. **Graph import:** each hierarchy or communication-log submission creates an `OrganizationImport` with an `OrganizationImportId` within the Graph service. Validate and normalize the batch, record its outcome, and enforce the privacy policy before accepted data is used downstream.

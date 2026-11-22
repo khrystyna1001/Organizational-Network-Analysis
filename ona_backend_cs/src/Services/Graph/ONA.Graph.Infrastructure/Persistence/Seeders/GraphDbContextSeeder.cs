@@ -3,7 +3,7 @@ using ONA.Graph.Domain.Aggregates;
 
 namespace ONA.Graph.Infrastructure.Persistence.Seeders;
 
-public sealed class GraphDbContextSeeder(GraphDbContext context)
+internal sealed class GraphDbContextSeeder(GraphDbContext context)
 {
     public async Task SeedAsync()
     {

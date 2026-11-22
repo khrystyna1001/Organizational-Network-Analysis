@@ -4,30 +4,6 @@ namespace ONA.Graph.Application.Services;
 
 public interface IGraphService
 {
-    Task<BoardDto> CreateBoardAsync(
-        CreateBoardDto input,
-        CancellationToken cancellationToken = default);
-
-    Task<ImportedBoardDto> CreateBoardFromImportAsync(
-        ImportBoardDto input,
-        CancellationToken cancellationToken = default);
-
-    Task<IReadOnlyList<BoardDto>> GetBoardsAsync(
-        CancellationToken cancellationToken = default);
-
-    Task<BoardDto?> GetBoardAsync(
-        string id,
-        CancellationToken cancellationToken = default);
-
-    Task<BoardDto?> UpdateBoardAsync(
-        string id,
-        UpdateBoardDto input,
-        CancellationToken cancellationToken = default);
-
-    Task<bool> DeleteBoardAsync(
-        string id,
-        CancellationToken cancellationToken = default);
-
     Task<NodeDto> AddNodeAsync(
         string boardId,
         CreateNodeDto input,

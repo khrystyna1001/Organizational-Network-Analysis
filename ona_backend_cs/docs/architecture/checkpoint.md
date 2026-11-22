@@ -10,7 +10,7 @@ This file is a handoff for future coding agents. Read it together with [README.m
 - **Architectural style:** layered Graph service with Domain, Application, Infrastructure, and Presentation; Identity, Analysis, and Insights remain separate scaffolds.
 - **Graph persistence:** Graph boards, nodes, and connections use MySQL through `MySql.EntityFrameworkCore` 10.0.12 and EF Core 10.0.14. Local development targets MySQL 8.4 in Docker. Raw CSV/import batches are not persisted, but the employee graph created by CSV upload is persisted; the other contexts have no database configured.
 - **Graph runtime:** one Graph API at `src/Services/Graph/ONA.Graph.Presentation`, serving graph routes and the CSV import route on port 5056 (HTTP) / 7089 (HTTPS).
-- **Organization consolidation:** the separate Organization service and intermediate OrganizationGraph host have been deleted. `POST /api/v1/data` and its CSV parser are implemented in the Graph Presentation `Program.cs`. Do not recreate the deleted projects unless requested.
+- **Organization consolidation:** the separate Organization service and intermediate OrganizationGraph host have been deleted. `POST /api/v1/data` is handled by `OrganizationImportController`; CSV parsing is in the Graph ACL (`Infrastructure/Acl`). Do not recreate the deleted projects unless requested.
 
 ## Current implementation status
 
@@ -23,7 +23,7 @@ This file is a handoff for future coding agents. Read it together with [README.m
 
 Analysis, Insights, and Identity Infrastructure projects are empty seams. They are not functional integrations. Analysis/Insights API hosts currently have no business endpoints; Identity has no registration/auth endpoints.
 
-The Graph repository persists boards, nodes, and connections in MySQL. The employee CSV upload creates a board graph; raw CSV rows/import batches are not persisted. Configure `ConnectionStrings:Graph` through User Secrets or `ConnectionStrings__Graph` in the environment, and apply migrations before starting the Graph host. Run only the Graph host for graph and import APIs.
+The Graph repository persists boards, nodes, and connections in MySQL. The employee CSV upload creates a board graph; raw CSV rows/import batches are not persisted. Configure `ConnectionStrings:Graph` through User Secrets or `ConnectionStrings__Graph` in the environment; migrations are applied automatically at startup. Run only the Graph host for graph and import APIs.
 
 ## Event Storming board summary
 
@@ -53,7 +53,7 @@ Prior architecture recommendation: UI/read models are presentation/query concern
 - Keep HTTP status codes, ASP.NET types, database/EF types, provider SDK types, and UI concerns out of Domain.
 - Use each context's Application layer for use cases and ports; Infrastructure for MySQL repositories, OAuth/identity, LLM, event transport, and other adapters; Presentation for HTTP and composition root.
 - The solution currently has no event broker choice. Do not introduce one silently; ask the user or propose options and document the choice.
-- Graph MySQL persistence is implemented with Oracle `MySql.EntityFrameworkCore` 10.0.12 / EF Core 10.0.14. Connection strings are supplied through User Secrets or environment configuration; never commit credentials. Apply migrations explicitly before starting the app. Persisted scope is currently limited to Graph boards, nodes, and connections; CSV import remains in-memory.
+- Graph MySQL persistence is implemented with Oracle `MySql.EntityFrameworkCore` 10.0.12 / EF Core 10.0.14. Connection strings are supplied through User Secrets or environment configuration; never commit credentials. Migrations are applied automatically at startup. Persisted scope is currently limited to Graph boards, nodes, and connections; CSV import remains in-memory.
 - Identity provider and LLM provider are both **deferred/unselected**. Never add provider credentials or hard-code secrets. Use options/secret configuration and adapter interfaces when those tasks begin.
 - Do not silently decide communication anonymization, real-time-vs-batch graph refresh, bottleneck false-positive handling, LLM quality/fallback, or disagreement/approval semantics. Ask the user before implementing behavior that depends on these.
 - The Graph host is the only service for graph and CSV import APIs. Keep `POST /api/v1/data` and existing Graph API contracts stable unless the task specifically changes them.
@@ -63,7 +63,7 @@ Prior architecture recommendation: UI/read models are presentation/query concern
 
 The user requested one Graph service with the CSV import API incorporated in its `Program.cs`. This consolidation is implemented and verified:
 
-- [x] Put `POST /api/v1/data` and the CSV parser in Graph Presentation `Program.cs`.
+- [x] Put `POST /api/v1/data` in the Graph service (parser moved to the ACL in Lab 5).
 - [x] Preserve the CSV response shape, duplicate-header suffixing, blank-row handling, numeric parsing, and malformed/oversized-row errors.
 - [x] Remove Organization and OrganizationGraph projects/directories and their solution entries.
 - [x] Keep the Graph service on HTTP `5056` / HTTPS `7089`.
@@ -132,11 +132,13 @@ Services run in separate terminals. In Development, each exposes `/openapi/v1.js
 Implemented API routes:
 
 - Graph health: `GET /`
-- Graph boards: `GET/POST /api/v1/boards`, `GET/PUT/DELETE /api/v1/boards/{boardId}`
+- Graph boards: `GET/POST /api/v1/boards`, `GET/PUT/DELETE /api/v1/boards/{boardId}`, `POST /api/v1/boards/{boardId}/build|publish|archive`
 - Graph nodes: `GET/POST /api/v1/nodes`, `GET/PUT/DELETE /api/v1/nodes/{nodeId}`; list can filter with `board_id`
 - Graph connections: `GET/POST /api/v1/connections`, `GET/PUT/DELETE /api/v1/connections/{connectionId}`; list can filter with `board_id`
 - Graph CSV import: `POST /api/v1/data`, multipart form field `file`
 - Identity, Analysis, Insights: no business routes yet.
+
+> **Lab 5 update:** Board CQRS + lifecycle (Draft → Built → Published → Archived, migration `AddBoardLifecycle`), HRIS ACL, value objects `BoardName`/`NodeName`/`DepartmentName`, and architecture tests were added. The baseline below predates them; re-run `dotnet test ONA.sln`.
 
 ## Verification baseline
 

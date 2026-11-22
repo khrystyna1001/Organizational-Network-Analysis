@@ -1,5 +1,7 @@
 # ADR-005: Create a Graph board from employee CSV data
 
+> **Update (Lab 5):** the response `data` now contains the imported employees in our model instead of the raw CSV rows; missing columns return `422 board_import.missing_columns` instead of `400`.
+
 * **Status:** Accepted
 * **Date:** 2026-11-10
 * **Project context:** ONA Graph service

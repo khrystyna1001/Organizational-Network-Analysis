@@ -1,5 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
+using ONA.Graph.Application.Abstractions.Messaging;
 using ONA.Graph.Application.DTOs;
+using ONA.Graph.Application.Features.Boards.Commands;
+using ONA.Graph.Application.Features.Boards.Queries;
 using ONA.Graph.Application.Services;
 using ONA.Graph.Infrastructure;
 
@@ -20,8 +23,9 @@ public sealed class GraphPersistenceTests(MySqlDatabaseFixture fixture)
         await using (var scope = services.CreateAsyncScope())
         {
             var graph = scope.ServiceProvider.GetRequiredService<IGraphService>();
-            var board = await graph.CreateBoardAsync(
-                new CreateBoardDto("Engineering", "Graph persistence test"));
+            var board = await scope.ServiceProvider
+                .GetRequiredService<ICommandHandler<CreateBoardCommand, BoardDto>>()
+                .HandleAsync(new CreateBoardCommand("Engineering", "Graph persistence test"));
             boardId = board.Id;
 
             var first = await graph.AddNodeAsync(
@@ -40,7 +44,9 @@ public sealed class GraphPersistenceTests(MySqlDatabaseFixture fixture)
         await using (var scope = services.CreateAsyncScope())
         {
             var graph = scope.ServiceProvider.GetRequiredService<IGraphService>();
-            var board = await graph.GetBoardAsync(boardId);
+            var board = await scope.ServiceProvider
+                .GetRequiredService<IQueryHandler<GetBoardByIdQuery, BoardDto?>>()
+                .HandleAsync(new GetBoardByIdQuery(boardId));
             var nodes = await graph.GetNodesAsync(boardId);
             var connections = await graph.GetConnectionsAsync(boardId);
 
@@ -68,7 +74,9 @@ public sealed class GraphPersistenceTests(MySqlDatabaseFixture fixture)
         await using (var scope = services.CreateAsyncScope())
         {
             var graph = scope.ServiceProvider.GetRequiredService<IGraphService>();
-            var board = await graph.CreateBoardAsync(new CreateBoardDto("Engineering", null));
+            var board = await scope.ServiceProvider
+                .GetRequiredService<ICommandHandler<CreateBoardCommand, BoardDto>>()
+                .HandleAsync(new CreateBoardCommand("Engineering", null));
             boardId = board.Id;
             var first = await graph.AddNodeAsync(
                 boardId,
@@ -93,6 +101,70 @@ public sealed class GraphPersistenceTests(MySqlDatabaseFixture fixture)
             var graph = scope.ServiceProvider.GetRequiredService<IGraphService>();
             Assert.Empty(await graph.GetConnectionsAsync(boardId));
             Assert.Single(await graph.GetNodesAsync(boardId));
+        }
+    }
+
+    [Fact]
+    public async Task LifecycleCommandsPersistStateAndPublishedBoardCannotBeDeleted()
+    {
+        await fixture.ResetDatabaseAsync();
+        await using var services = CreateServices();
+        string boardId;
+
+        await using (var scope = services.CreateAsyncScope())
+        {
+            var board = await scope.ServiceProvider
+                .GetRequiredService<ICommandHandler<CreateBoardCommand, BoardDto>>()
+                .HandleAsync(new CreateBoardCommand("Lifecycle", null));
+            boardId = board.Id;
+            await scope.ServiceProvider.GetRequiredService<IGraphService>()
+                .AddNodeAsync(boardId, new CreateNodeDto(boardId, "Alex", "Director", "Engineering"));
+        }
+
+        await using (var scope = services.CreateAsyncScope())
+        {
+            await scope.ServiceProvider
+                .GetRequiredService<ICommandHandler<BuildBoardGraphCommand, BoardDto>>()
+                .HandleAsync(new BuildBoardGraphCommand(boardId));
+        }
+
+        await using (var scope = services.CreateAsyncScope())
+        {
+            await scope.ServiceProvider
+                .GetRequiredService<ICommandHandler<PublishBoardCommand, BoardDto>>()
+                .HandleAsync(new PublishBoardCommand(boardId));
+        }
+
+        await using (var scope = services.CreateAsyncScope())
+        {
+            var reloaded = await scope.ServiceProvider
+                .GetRequiredService<IQueryHandler<GetBoardByIdQuery, BoardDto?>>()
+                .HandleAsync(new GetBoardByIdQuery(boardId));
+            Assert.NotNull(reloaded);
+            Assert.Equal("Published", reloaded.Lifecycle);
+            Assert.NotNull(reloaded.CurrentGraphVersionId);
+
+            await Assert.ThrowsAsync<ONA.Graph.Domain.Exceptions.BoardDeletionNotAllowedException>(
+                () => scope.ServiceProvider
+                    .GetRequiredService<ICommandHandler<DeleteBoardCommand, bool>>()
+                    .HandleAsync(new DeleteBoardCommand(boardId)));
+        }
+
+        await using (var scope = services.CreateAsyncScope())
+        {
+            await scope.ServiceProvider
+                .GetRequiredService<ICommandHandler<ArchiveBoardCommand, BoardDto>>()
+                .HandleAsync(new ArchiveBoardCommand(boardId));
+            Assert.True(await scope.ServiceProvider
+                .GetRequiredService<ICommandHandler<DeleteBoardCommand, bool>>()
+                .HandleAsync(new DeleteBoardCommand(boardId)));
+        }
+
+        await using (var scope = services.CreateAsyncScope())
+        {
+            Assert.Null(await scope.ServiceProvider
+                .GetRequiredService<IQueryHandler<GetBoardByIdQuery, BoardDto?>>()
+                .HandleAsync(new GetBoardByIdQuery(boardId)));
         }
     }
 

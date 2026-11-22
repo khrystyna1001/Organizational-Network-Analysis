@@ -1,5 +1,7 @@
 # ADR-004: Persist Graph aggregates in MySQL
 
+> **Update:** migrations are now applied automatically at startup (`InitializeGraphDatabaseAsync`); `dotnet ef database update` is optional.
+
 * **Status:** Accepted
 * **Date:** 2026-11-10
 * **Project context:** ONA Graph service

@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization;
-using ONA.Graph.Application.DTOs;
 
 namespace ONA.Graph.Presentation.Contracts;
 
@@ -9,8 +8,6 @@ public sealed record CreateBoardRequest
     public string? Name { get; init; }
 
     public string? Description { get; init; }
-
-    public CreateBoardDto ToDto() => new(Name, Description);
 }
 
 /// <summary>Payload for updating a graph board.</summary>
@@ -32,7 +29,4 @@ public sealed record UpdateBoardRequest
 
     [JsonIgnore]
     public bool DescriptionSpecified { get; private set; }
-
-    public UpdateBoardDto ToDto() =>
-        new(Name, Description, DescriptionSpecified);
 }

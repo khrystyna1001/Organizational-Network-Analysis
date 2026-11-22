@@ -1,6 +1,8 @@
 # Aggregate lifecycle, invariants, tests, and pattern
 
-The **Graph `Board` aggregate** is the core aggregate: it owns its nodes and connections and protects graph consistency. The lifecycle below is a target-domain extension using the planned immutable `GraphVersion` snapshots; the current `Board` implementation has no lifecycle status or publish/update workflow. The existing connection rules listed in the invariant catalog are implemented today; proposed lifecycle rules are marked as target rules.
+The **Graph `Board` aggregate** is the core aggregate: it owns its nodes and connections and protects graph consistency. The lifecycle below uses immutable `GraphVersion` snapshots.
+
+**Implemented (Lab 5):** Draft → Built → Published → Archived, persisted in MySQL. `UpdatePending` is a target rule.
 
 ### Board lifecycle state machine
 
@@ -23,6 +25,7 @@ stateDiagram-v2
       Forbidden: directly add, edit, or remove
       nodes/connections in the published snapshot.
       Changes require a new version.
+      Forbidden: DeleteBoard (archive first).
     end note
     note right of Archived
       Terminal state: build, publish, and update
@@ -50,10 +53,11 @@ Each Board instance holds its Nodes and Connections in its aggregate collections
 | `Board` | A connection must link two distinct nodes; a node cannot have a relationship to itself. | `InvalidConnectionException` | Implemented |
 | `Board` | At most one directed connection may exist for a given `(SourceNodeId, TargetNodeId)` pair. The reverse direction is a separate connection. | `DuplicateConnectionException` | Implemented |
 | `Board` | A present connection weight must be finite and greater than zero; zero/negative or non-finite strength is not a meaningful graph relationship. | `InvalidConnectionWeightException` | Implemented |
-| `Board` | A Board can be published only after it has a successfully validated graph built from an accepted organization import and a `GraphVersion` snapshot has been saved. | `GraphNotReadyForPublicationException` | Target rule; lifecycle not implemented |
-| `Board` | A published graph is immutable. Any changes must be applied to a candidate and saved as a new `GraphVersion`; the old version remains unchanged for existing consumers. | `PublishedGraphMutationNotAllowedException` | Target rule; lifecycle not implemented |
+| `Board` | A Board can be built/published only when its graph contains at least one node; publishing saves a new `GraphVersionId`. (Snapshot content and import acceptance: target rule.) | `GraphNotReadyForPublicationException` (`board.graph_not_ready`) | Implemented (node-count guard) |
+| `Board` | A published (or archived) graph is immutable: adding, updating or removing nodes/connections is rejected. Changes must go through a new `GraphVersion` (target). | `PublishedGraphMutationNotAllowedException` (`board.published_graph_mutation_not_allowed`) | Implemented |
 | `Board` | A graph update may be proposed/applied only when an approved recommendation references the Board's current `GraphVersion`; a rejected or unrelated recommendation cannot change the graph. | `GraphUpdateRequiresApprovalException` | Target rule; lifecycle not implemented |
-| `Board` | A lifecycle command may execute only from a state that permits that command; a rejected command leaves the Board and its current version unchanged. | `InvalidGraphStateTransitionException` | Target rule; lifecycle not implemented |
+| `Board` | A lifecycle command may execute only from a state that permits that command; a rejected command leaves the Board and its current version unchanged. | `InvalidGraphStateTransitionException` (`board.invalid_state_transition`) | Implemented |
+| `Board` | A Published board is in use by analysis consumers and cannot be deleted; it must be archived first. Draft, Built and Archived boards can be deleted. | `BoardDeletionNotAllowedException` (`board.deletion_not_allowed`) | Implemented |
 
 ### Given–When–Then scenarios
 
@@ -77,6 +81,29 @@ Each Board instance holds its Nodes and Connections in its aggregate collections
    - **When** a caller attempts to add or remove a node directly on the published snapshot instead of proposing a versioned update,
    - **Then** `PublishedGraphMutationNotAllowedException` is thrown and `v1` remains unchanged.
 
+5. **Negative — reject deleting a published board**
+   - **Given** a Published Board,
+   - **When** `DeleteBoard` is requested,
+   - **Then** `BoardDeletionNotAllowedException` is thrown and the Board still exists; after `ArchiveBoard` the deletion succeeds.
+
+6. **Negative — reject building an empty graph**
+   - **Given** a Draft Board without nodes,
+   - **When** `BuildNetworkGraph` is called,
+   - **Then** `GraphNotReadyForPublicationException` is thrown and the Board stays `Draft`.
+
+### CQRS mapping (Lab 5)
+
+| Operation | Command / Query | HTTP | Aggregate method |
+| --- | --- | --- | --- |
+| Create | `CreateBoardCommand` | `POST /api/v1/boards` | `new Board(...)` (Draft) |
+| Create from HRIS | `ImportBoardFromHrisCommand` | `POST /api/v1/data` | `AddNode`, `AddConnection` via ACL port |
+| Read | `GetAllBoardsQuery`, `GetBoardByIdQuery` | `GET /api/v1/boards`, `GET /api/v1/boards/{id}` | – (`AsNoTracking`) |
+| Update details | `RenameBoardCommand` | `PUT /api/v1/boards/{id}` | `UpdateDetails` |
+| Update (state) | `BuildBoardGraphCommand` | `POST /api/v1/boards/{id}/build` | `BuildNetworkGraph` |
+| Update (state) | `PublishBoardCommand` | `POST /api/v1/boards/{id}/publish` | `PublishGraphVersion` |
+| Update (state) | `ArchiveBoardCommand` | `POST /api/v1/boards/{id}/archive` | `Archive` |
+| Delete | `DeleteBoardCommand` | `DELETE /api/v1/boards/{id}` | `EnsureCanBeDeleted` |
+
 ### GoF pattern: State
 
 Apply the **State** pattern to the Board lifecycle. `Board` delegates lifecycle commands to the current state object; concrete states (`DraftState`, `BuiltState`, `PublishedState`, `UpdatePendingState`, `ArchivedState`) permit only their listed transitions. For example, `PublishedState.BeginApprovedGraphUpdate` accepts only an approval tied to the current version; `DraftState.Publish` and `ArchivedState.Build` reject the command. An invalid command throws `InvalidGraphStateTransitionException` without changing the state or current graph version. The status returned by each state is the state diagram's business state.
@@ -95,4 +122,4 @@ internal interface IBoardState
 }
 ```
 
-`ApprovedRecommendation` represents a recommendation already verified as approved and tied to the Board's current version; it is not an unchecked `bool`. Each concrete state either performs its allowed transition and returns the next state or throws `InvalidGraphStateTransitionException`. This State model is proposed for the target lifecycle and is not present in the current Graph implementation.
+`ApprovedRecommendation` represents a recommendation already verified as approved and tied to the Board's current version; it is not an unchecked `bool`. Each concrete state either performs its allowed transition and returns the next state or throws `InvalidGraphStateTransitionException`. Implemented in `Domain/Aggregates/BoardStates.cs` (without `UpdatePending`).

@@ -12,4 +12,9 @@
     <ProjectReference Include="..\ONA.Graph.Application\ONA.Graph.Application.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="ONA.Graph.Infrastructure.Tests" />
+    <InternalsVisibleTo Include="ONA.Graph.Infrastructure.IntegrationTests" />
+  </ItemGroup>
+
 </Project>

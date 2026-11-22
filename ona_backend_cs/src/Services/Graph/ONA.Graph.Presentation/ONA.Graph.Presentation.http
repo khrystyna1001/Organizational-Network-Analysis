@@ -129,3 +129,90 @@ DELETE {{ONA.Graph.Presentation_HostAddress}}/api/v1/nodes/{{createFirstNode.res
 
 ### Delete board
 DELETE {{ONA.Graph.Presentation_HostAddress}}/api/v1/boards/{{createBoard.response.body.$.id}}
+
+###############################################################################
+### Lab 5 – CQRS CRUD + Board lifecycle (state machine) persisted in MySQL
+###############################################################################
+
+### 1. CREATE – new Draft board (201)
+# @name lifecycleBoard
+POST {{ONA.Graph.Presentation_HostAddress}}/api/v1/boards
+Content-Type: application/json
+
+{
+  "name": "Lifecycle demo",
+  "description": "Lab 5 CQRS demo"
+}
+
+### 2. UPDATE (domain) – build an empty graph -> 422 board.graph_not_ready
+POST {{ONA.Graph.Presentation_HostAddress}}/api/v1/boards/{{lifecycleBoard.response.body.$.id}}/build
+
+### 3. Add a node so the graph can be built
+POST {{ONA.Graph.Presentation_HostAddress}}/api/v1/nodes
+Content-Type: application/json
+
+{
+  "board_id": "{{lifecycleBoard.response.body.$.id}}",
+  "name": "Alex One",
+  "title": "Director",
+  "department": "Management"
+}
+
+### 4. UPDATE (domain) – Draft -> Built (200)
+POST {{ONA.Graph.Presentation_HostAddress}}/api/v1/boards/{{lifecycleBoard.response.body.$.id}}/build
+
+### 5. UPDATE (domain) – Built -> Published, returns current_graph_version_id (200)
+POST {{ONA.Graph.Presentation_HostAddress}}/api/v1/boards/{{lifecycleBoard.response.body.$.id}}/publish
+
+### 6. READ – single board via AsNoTracking query (200, lifecycle = Published)
+GET {{ONA.Graph.Presentation_HostAddress}}/api/v1/boards/{{lifecycleBoard.response.body.$.id}}
+
+### 7. Mutating a published graph -> 422 board.published_graph_mutation_not_allowed
+POST {{ONA.Graph.Presentation_HostAddress}}/api/v1/nodes
+Content-Type: application/json
+
+{
+  "board_id": "{{lifecycleBoard.response.body.$.id}}",
+  "name": "Sam Smith",
+  "title": "Manager",
+  "department": "Engineering"
+}
+
+### 8. DELETE a published board -> 422 board.deletion_not_allowed
+DELETE {{ONA.Graph.Presentation_HostAddress}}/api/v1/boards/{{lifecycleBoard.response.body.$.id}}
+
+### 9. UPDATE (domain) – Published -> Archived (200)
+POST {{ONA.Graph.Presentation_HostAddress}}/api/v1/boards/{{lifecycleBoard.response.body.$.id}}/archive
+
+### 10. DELETE the archived board (204)
+DELETE {{ONA.Graph.Presentation_HostAddress}}/api/v1/boards/{{lifecycleBoard.response.body.$.id}}
+
+### 11. HRIS import through the Anti-Corruption Layer (200)
+POST {{ONA.Graph.Presentation_HostAddress}}/api/v1/data
+Content-Type: multipart/form-data; boundary=ona
+
+--ona
+Content-Disposition: form-data; name="board_name"
+
+HRIS import demo
+--ona
+Content-Disposition: form-data; name="file"; filename="employees.csv"
+Content-Type: text/csv
+
+EmpID,FirstName,LastName,Title,DepartmentType,Supervisor
+100,Alex,One,Director,Management,NaN
+101,Sam,Smith,Manager,Engineering,100
+102,Taylor,Jones,Engineer,Engineering,101
+--ona--
+
+### 12. HRIS export missing a column -> 422 board_import.missing_columns
+POST {{ONA.Graph.Presentation_HostAddress}}/api/v1/data
+Content-Type: multipart/form-data; boundary=ona
+
+--ona
+Content-Disposition: form-data; name="file"; filename="broken.csv"
+Content-Type: text/csv
+
+EmpID,FirstName,LastName,Title
+100,Alex,One,Director
+--ona--
