@@ -1,0 +1,29 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-local_root_password}
+      MYSQL_DATABASE: ona_graph
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-local_root_password}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  graph-api:
+    build: .
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development   # enables /scalar/v1 and /openapi/v1.json
+      ConnectionStrings__Graph: "Server=mysql;Port=3306;Database=ona_graph;User Id=root;Password=${MYSQL_ROOT_PASSWORD:-local_root_password}"
+    ports:
+      - "5056:8080"
+
+volumes:
+  mysql-data:

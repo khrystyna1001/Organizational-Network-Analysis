@@ -25,12 +25,22 @@ dotnet run --project src/Services/Graph/ONA.Graph.Presentation --launch-profile 
 - API: `http://localhost:5056`, explorer `/scalar/v1`, OpenAPI `/openapi/v1.json`.
 - Example requests: `src/Services/Graph/ONA.Graph.Presentation/ONA.Graph.Presentation.http`.
 
+### With Docker
+
+```bash
+docker compose up --build   # MySQL + API on http://localhost:5056
+```
+
+The image build runs the unit and architecture tests; if any fails, no image is produced.
+
 ## Test
 
 ```bash
 dotnet test ONA.sln                                                   # all (needs Docker)
 dotnet test ONA.sln --filter "FullyQualifiedName!~IntegrationTests"  # without Docker
 ```
+
+CI (`.github/workflows/ci.yml`): on every push/PR to `main` it runs all tests, then builds the Docker image and smoke-tests it with MySQL – only if the tests passed.
 
 ## Graph API
 

@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+defaults:
+  run:
+    working-directory: ona_backend_cs
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet restore ONA.sln
+      - run: dotnet build ONA.sln -c Release --no-restore
+      # Unit, architecture and MySQL (Testcontainers) integration tests
+      - run: dotnet test ONA.sln -c Release --no-build --logger trx --results-directory TestResults
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: ona_backend_cs/TestResults
+
+  docker:
+    needs: test          # runs only if all tests passed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t ona-graph-api:${{ github.sha }} .
+      - name: Smoke test with MySQL
+        run: |
+          docker compose up -d --build
+          for i in $(seq 1 30); do
+            curl -fs http://localhost:5056/ && exit_code=0 && break || exit_code=1
+            sleep 2
+          done
+          docker compose logs graph-api
+          docker compose down -v
+          exit $exit_code
