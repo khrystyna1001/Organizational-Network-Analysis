@@ -1,29 +1,97 @@
 # Context Map and ACL
 
-## Contexts
+## 1. Subdomains and Bounded Contexts
 
-| Context | Type | Responsibility |
-| --- | --- | --- |
-| Graph | Core | `Board` (nodes, connections, lifecycle), HRIS import |
-| Analysis | Core (scaffold) | `AnalysisRun` per `GraphVersionId` |
-| Insights | Supporting (scaffold) | `Recommendation` from analysis |
-| Identity | Generic (scaffold) | `User` |
-| HRIS | External | Employee CSV export |
+| Context | Classification | Main aggregates (Lab 2) | Business justification | Microarchitecture |
+| --- | --- | --- | --- | --- |
+| **Graph** | Core | `Board` (`Node`, `Connection`), `GraphVersion`, `OrganizationImport` | ONA's value starts with an accurate, versioned organization network; graph rules (no self/duplicate links, immutable published versions) are ours and change with every new data source. | Rich Domain Model + Clean Architecture – invariants and the Board state machine need unit tests without a database. |
+| **Analysis** | Core | `AnalysisRun` | Bottleneck detection is the product's differentiator; thresholds and the "administrative activity vs. real bottleneck" policy will change often. | Rich Domain Model + Hexagonal – metric policies as strategies, runs must be reproducible for one `GraphVersionId`. |
+| **Insights** | Supporting | `Recommendation` | Needed to turn metrics into advice, but text generation is bought from an LLM provider; our part is delivery and the approve/reject workflow. | Transaction Script + adapter behind `ILlmPort` – few rules, main risk is the external call. |
+| **Identity** | Generic | `User` | Registration and login are solved the same way everywhere; we use an OAuth/OIDC provider. | Integration – thin adapter, provider model accepted as is. |
+
+### Bounded Context Canvas – Graph (Core)
+
+| Section | Content |
+| --- | --- |
+| Name and purpose | **Graph** – build and keep a consistent, versioned network of people (nodes) and relationships (connections) from organization data. |
+| Classification | Core subdomain; role: system of record for the organization network. |
+| Ubiquitous Language | **Board** – one organization network; **Node** – a person; **Connection** – directed, weighted relationship; **ConnectionWeight** – strength > 0; **Reporting line** – supervisor → employee connection; **GraphVersion** – immutable published snapshot; **Lifecycle** – Draft / Built / Published / Archived; **OrganizationImport** – one submitted HR export. |
+| Business rules | Connection endpoints belong to the same Board; no self-connection; one connection per direction; weight finite and > 0; empty graph cannot be built; Published graph is immutable; Published board cannot be deleted (see `stateDiagram-analysis.md`). |
+| Incoming | Commands: `CreateBoard`, `ImportBoardFromHris`, `AddNode`, `AddConnection`, `BuildNetworkGraph`, `PublishGraphVersion`, `ArchiveBoard`, `DeleteBoard`, `ApplyGraphUpdate` (target, from Insights). Queries: `GetBoardById`, `GetAllBoards`, nodes/connections by board. |
+| Outgoing | Events (target): `NetworkGraphBuilt`, `GraphVersionPublished { boardId, graphVersionId }` for Analysis. |
+| Dependencies | HRIS export (ACL), Analysis (consumes versions), Insights (requests approved updates), Identity (`UserId` only). |
+
+## 2. Context Map
 
 ```mermaid
 flowchart LR
-    HRIS[[HRIS export]] -- ACL --> Graph
-    Graph -- GraphVersionId --> Analysis
-    Analysis -- AnalysisRunId --> Insights
-    Insights -. approved update .-> Graph
-    Identity -- UserId --> Graph
+    HRIS[["HRIS export [U]<br/>external"]]
+    OIDC[["OAuth / OIDC provider [U]<br/>external"]]
+    LLM[["LLM provider [U]<br/>external"]]
+    Graph["Graph [D/U]<br/>Core"]
+    Analysis["Analysis [D/U]<br/>Core"]
+    Insights["Insights [D]<br/>Supporting"]
+    Identity["Identity [U/D]<br/>Generic"]
+
+    HRIS -- "ACL" --> Graph
+    Graph -- "OHS + Published Language: GraphVersionPublished" --> Analysis
+    Analysis -- "Customer–Supplier" --> Insights
+    Graph -- "Customer–Supplier: ApplyGraphUpdate" --> Insights
+    LLM -- "Conformist + ILlmPort" --> Insights
+    OIDC -- "Conformist" --> Identity
+    Identity -- "OHS: UserId claim" --> Graph
 ```
 
-## ACL: Graph ← HRIS
+Arrows point from Upstream [U] to Downstream [D]. Only Graph and the HRIS ACL are implemented; the other relationships are the target design.
 
-**Port** (`Application/Ports/IEmployeeDirectoryPort.cs`):
-`Task<OrganizationSnapshot> ReadOrganizationAsync(Stream employeeExport, CancellationToken ct)`
-returns `OrganizationMember(EmployeeId, NodeName Name, Title, DepartmentName Department, SupervisorEmployeeId?)`.
+| Relationship | Pattern | Who dictates the model | Why | Main risk |
+| --- | --- | --- | --- | --- |
+| HRIS → Graph | Anti-Corruption Layer | HRIS (we cannot change the export) | Foreign column names (`EmpID`, `DepartmentType`), `NaN` as empty, many personal-data columns we must not store | Translator must follow every export change |
+| Graph → Analysis | Open Host Service + Published Language | Graph | Analysis must read one stable, immutable snapshot identified by `GraphVersionId` | Versioning the snapshot contract |
+| Analysis → Insights | Customer–Supplier | Analysis, Insights can request fields | Same company and vocabulary (metrics, bottlenecks); Insights needs `AnalysisRunId` for provenance | Insights blocked when Analysis priorities differ |
+| Graph → Insights | Customer–Supplier | Graph | Only an approved `Recommendation` may request `ApplyGraphUpdate`; Graph keeps its invariants | Update requests rejected if the version changed |
+| LLM provider → Insights | Conformist (port kept) | LLM provider | Supporting context; provider API is clean, we only need prompt in / text out | Provider changes and outages; mitigated by `ILlmPort` |
+| OIDC provider → Identity | Conformist | OIDC standard | Generic problem, open standard | Lock-in to provider features |
+| Identity → Graph | Open Host Service | Identity | Other contexts need only a `UserId` claim, not the `User` model | Claim format changes |
+
+No Shared Kernel: contexts share only identifiers passed in contracts (`BoardId`, `GraphVersionId`, `AnalysisRunId`, `UserId`).
+
+## 3. ACL: Graph ← HRIS
+
+**Flow** (success and error paths):
+
+```mermaid
+sequenceDiagram
+    participant H as ImportBoardFromHrisCommandHandler
+    participant P as IEmployeeDirectoryPort (HrisEmployeeDirectoryAcl)
+    participant A as CsvHrisAdapter
+    participant T as HrisModelTranslator
+    participant X as HRIS CSV export
+    H->>P: ReadOrganizationAsync(stream)
+    P->>A: ReadExportAsync(stream)
+    A->>X: read CSV
+    alt malformed file
+        A-->>H: HrisIntegrationException (400)
+    else readable
+        A-->>P: HRIS_EXPORT_DTO
+        P->>T: ToOrganization(dto)
+        alt unknown Supervisor / missing column
+            T-->>H: InvalidBoardImportException / MissingImportColumnsException (422)
+        else valid
+            T-->>H: OrganizationSnapshot (NodeName, DepartmentName)
+        end
+    end
+```
+
+**Port**:
+```csharp
+public interface IEmployeeDirectoryPort
+{
+    Task<OrganizationSnapshot> ReadOrganizationAsync(Stream employeeExport, CancellationToken ct = default);
+}
+```
+
+Returns `OrganizationMember(EmployeeId, NodeName Name, Title, DepartmentName Department, SupervisorEmployeeId?)` – `NodeName` and `DepartmentName` are Lab 2 Value Objects.
 
 **Classes** (`Infrastructure/Acl`, `internal sealed`): `HRIS_EXPORT_DTO`, `HRIS_EMPLOYEE_DTO`, `CsvHrisAdapter` (I/O), `HrisModelTranslator` (mapping), `HrisEmployeeDirectoryAcl` (facade).
 
