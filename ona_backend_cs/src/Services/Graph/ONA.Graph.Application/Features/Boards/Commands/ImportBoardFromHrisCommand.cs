@@ -12,7 +12,7 @@ namespace ONA.Graph.Application.Features.Boards.Commands;
 /// Anti-Corruption Layer behind <see cref="IEmployeeDirectoryPort"/>; this handler sees only
 /// our model (NodeName, DepartmentName, supervisor references).
 /// </summary>
-public sealed record ImportBoardFromHrisCommand(string BoardName, Stream EmployeeExport)
+public sealed record ImportBoardFromHrisCommand(string BoardName, Stream EmployeeExport, ColumnMapping? Mapping = null)
     : ICommand<ImportedBoardDto>;
 
 public sealed class ImportBoardFromHrisCommandHandler(
@@ -31,6 +31,7 @@ public sealed class ImportBoardFromHrisCommandHandler(
 
         var organization = await employeeDirectory.ReadOrganizationAsync(
             command.EmployeeExport,
+            command.Mapping,
             cancellationToken);
 
         var board = new Board(Guid.NewGuid().ToString(), command.BoardName, null);

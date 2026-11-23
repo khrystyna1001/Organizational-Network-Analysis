@@ -1,0 +1,1078 @@
+openapi: 3.1.1
+info:
+  title: ONA Graph API
+  description: Import organizational CSV data and manage network boards, nodes,
+    and weighted connections.
+  version: v1
+servers:
+  - url: http://localhost:5056/
+paths:
+  /api/v1/boards:
+    post:
+      tags:
+        - Boards
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBoardRequest"
+          text/json:
+            schema:
+              $ref: "#/components/schemas/CreateBoardRequest"
+          application/*+json:
+            schema:
+              $ref: "#/components/schemas/CreateBoardRequest"
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/BoardDto"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BoardDto"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/BoardDto"
+        "422":
+          description: Unprocessable Entity
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+    get:
+      tags:
+        - Boards
+      responses:
+        "200":
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BoardDto"
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BoardDto"
+            text/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BoardDto"
+  /api/v1/boards/{boardId}:
+    get:
+      tags:
+        - Boards
+      operationId: GetBoard
+      parameters:
+        - name: boardId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/BoardDto"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BoardDto"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/BoardDto"
+        "404":
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+    put:
+      tags:
+        - Boards
+      parameters:
+        - name: boardId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBoardRequest"
+          text/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBoardRequest"
+          application/*+json:
+            schema:
+              $ref: "#/components/schemas/UpdateBoardRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/BoardDto"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BoardDto"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/BoardDto"
+        "404":
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "422":
+          description: Unprocessable Entity
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+    delete:
+      tags:
+        - Boards
+      parameters:
+        - name: boardId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "422":
+          description: Unprocessable Entity
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /api/v1/boards/{boardId}/build:
+    post:
+      tags:
+        - Boards
+      parameters:
+        - name: boardId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/BoardDto"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BoardDto"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/BoardDto"
+        "404":
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "422":
+          description: Unprocessable Entity
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /api/v1/boards/{boardId}/publish:
+    post:
+      tags:
+        - Boards
+      parameters:
+        - name: boardId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/BoardDto"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BoardDto"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/BoardDto"
+        "404":
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "422":
+          description: Unprocessable Entity
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /api/v1/boards/{boardId}/archive:
+    post:
+      tags:
+        - Boards
+      parameters:
+        - name: boardId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/BoardDto"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BoardDto"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/BoardDto"
+        "404":
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "422":
+          description: Unprocessable Entity
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /api/v1/connections:
+    post:
+      tags:
+        - Connections
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateConnectionRequest"
+          text/json:
+            schema:
+              $ref: "#/components/schemas/CreateConnectionRequest"
+          application/*+json:
+            schema:
+              $ref: "#/components/schemas/CreateConnectionRequest"
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ConnectionDto"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectionDto"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ConnectionDto"
+        "404":
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "422":
+          description: Unprocessable Entity
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+    get:
+      tags:
+        - Connections
+      parameters:
+        - name: board_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConnectionDto"
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConnectionDto"
+            text/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConnectionDto"
+  /api/v1/connections/{connectionId}:
+    get:
+      tags:
+        - Connections
+      operationId: GetConnection
+      parameters:
+        - name: connectionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ConnectionDto"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectionDto"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ConnectionDto"
+        "404":
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+    put:
+      tags:
+        - Connections
+      parameters:
+        - name: connectionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateConnectionRequest"
+          text/json:
+            schema:
+              $ref: "#/components/schemas/UpdateConnectionRequest"
+          application/*+json:
+            schema:
+              $ref: "#/components/schemas/UpdateConnectionRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ConnectionDto"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectionDto"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ConnectionDto"
+        "404":
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "422":
+          description: Unprocessable Entity
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+    delete:
+      tags:
+        - Connections
+      parameters:
+        - name: connectionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /:
+    get:
+      tags:
+        - Health
+      responses:
+        "200":
+          description: OK
+  /api/v1/nodes:
+    post:
+      tags:
+        - Nodes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNodeRequest"
+          text/json:
+            schema:
+              $ref: "#/components/schemas/CreateNodeRequest"
+          application/*+json:
+            schema:
+              $ref: "#/components/schemas/CreateNodeRequest"
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/NodeDto"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeDto"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/NodeDto"
+        "404":
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "422":
+          description: Unprocessable Entity
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+    get:
+      tags:
+        - Nodes
+      parameters:
+        - name: board_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NodeDto"
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NodeDto"
+            text/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NodeDto"
+  /api/v1/nodes/{nodeId}:
+    get:
+      tags:
+        - Nodes
+      operationId: GetNode
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/NodeDto"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeDto"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/NodeDto"
+        "404":
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+    put:
+      tags:
+        - Nodes
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNodeRequest"
+          text/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNodeRequest"
+          application/*+json:
+            schema:
+              $ref: "#/components/schemas/UpdateNodeRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/NodeDto"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeDto"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/NodeDto"
+        "404":
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "422":
+          description: Unprocessable Entity
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+    delete:
+      tags:
+        - Nodes
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /api/v1/data:
+    post:
+      tags:
+        - OrganizationImport
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              allOf:
+                - type: object
+                  properties:
+                    ContentType:
+                      type: string
+                    ContentDisposition:
+                      type: string
+                    Headers:
+                      type: object
+                      additionalProperties:
+                        type: array
+                        items:
+                          type: string
+                    Length:
+                      pattern: ^-?(?:0|[1-9]\d*)$
+                      type:
+                        - integer
+                        - string
+                      format: int64
+                    Name:
+                      type: string
+                    FileName:
+                      type: string
+                - type: object
+                  properties:
+                    board_name:
+                      type: string
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/OrganizationDataResponse"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationDataResponse"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationDataResponse"
+        "400":
+          description: Bad Request
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "422":
+          description: Unprocessable Entity
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+            text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+components:
+  schemas:
+    BoardDto:
+      required:
+        - id
+        - name
+        - description
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type:
+            - "null"
+            - string
+        lifecycle:
+          type: string
+          default: Draft
+        currentGraphVersionId:
+          type:
+            - "null"
+            - string
+        nodeCount:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+            - integer
+            - string
+          format: int32
+          default: 0
+        connectionCount:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+            - integer
+            - string
+          format: int32
+          default: 0
+    ConnectionDto:
+      required:
+        - id
+        - boardId
+        - sourceNodeId
+        - targetNodeId
+        - weight
+      type: object
+      properties:
+        id:
+          type: string
+        boardId:
+          type: string
+        sourceNodeId:
+          type: string
+        targetNodeId:
+          type: string
+        weight:
+          pattern: ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+          type:
+            - "null"
+            - number
+            - string
+          format: double
+    CreateBoardRequest:
+      type: object
+      properties:
+        name:
+          type:
+            - "null"
+            - string
+        description:
+          type:
+            - "null"
+            - string
+    CreateConnectionRequest:
+      required:
+        - boardId
+      type: object
+      properties:
+        boardId:
+          type: string
+        sourceNodeId:
+          type:
+            - "null"
+            - string
+        targetNodeId:
+          type:
+            - "null"
+            - string
+        weight:
+          pattern: ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+          type:
+            - "null"
+            - number
+            - string
+          format: double
+    CreateNodeRequest:
+      required:
+        - boardId
+      type: object
+      properties:
+        boardId:
+          type: string
+        name:
+          type:
+            - "null"
+            - string
+        title:
+          type:
+            - "null"
+            - string
+        department:
+          type:
+            - "null"
+            - string
+    ImportedMemberDto:
+      required:
+        - employeeId
+        - name
+        - title
+        - department
+        - supervisorEmployeeId
+      type: object
+      properties:
+        employeeId:
+          type: string
+        name:
+          type: string
+        title:
+          type: string
+        department:
+          type: string
+        supervisorEmployeeId:
+          type:
+            - "null"
+            - string
+    NodeDto:
+      required:
+        - id
+        - boardId
+        - name
+        - title
+        - department
+      type: object
+      properties:
+        id:
+          type: string
+        boardId:
+          type: string
+        name:
+          type: string
+        title:
+          type: string
+        department:
+          type: string
+    OrganizationDataResponse:
+      required:
+        - status
+        - totalRows
+        - data
+        - boardId
+        - nodesCreated
+        - connectionsCreated
+      type: object
+      properties:
+        status:
+          type: string
+        totalRows:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+            - integer
+            - string
+          format: int32
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ImportedMemberDto"
+        boardId:
+          type: string
+        nodesCreated:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+            - integer
+            - string
+          format: int32
+        connectionsCreated:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+            - integer
+            - string
+          format: int32
+    ProblemDetails:
+      type: object
+      properties:
+        type:
+          type:
+            - "null"
+            - string
+        title:
+          type:
+            - "null"
+            - string
+        status:
+          pattern: ^-?(?:0|[1-9]\d*)$
+          type:
+            - "null"
+            - integer
+            - string
+          format: int32
+        detail:
+          type:
+            - "null"
+            - string
+        instance:
+          type:
+            - "null"
+            - string
+    UpdateBoardRequest:
+      type: object
+      properties:
+        name:
+          type:
+            - "null"
+            - string
+        description:
+          type:
+            - "null"
+            - string
+    UpdateConnectionRequest:
+      type: object
+      properties:
+        weight:
+          pattern: ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
+          type:
+            - "null"
+            - number
+            - string
+          format: double
+    UpdateNodeRequest:
+      type: object
+      properties:
+        name:
+          type:
+            - "null"
+            - string
+        title:
+          type:
+            - "null"
+            - string
+        department:
+          type:
+            - "null"
+            - string
+tags:
+  - name: Boards
+  - name: Connections
+  - name: Health
+  - name: Nodes
+  - name: OrganizationImport

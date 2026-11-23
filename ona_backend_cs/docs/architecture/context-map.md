@@ -42,7 +42,7 @@ flowchart LR
     Identity -- "OHS: UserId claim" --> Graph
 ```
 
-Arrows point from Upstream [U] to Downstream [D]. Only Graph and the HRIS ACL are implemented; the other relationships are the target design.
+Arrows point from Upstream [U] to Downstream [D]. Implemented: HRIS → Graph (ACL); Graph → Analysis (event `GraphVersionPublished` + `GET /boards/{id}/snapshot`); Analysis → Insights (event `AnalysisCompleted` + `GET /analysis-runs/{id}`); Identity → all (JWT, see ADR-007). `ApplyGraphUpdate`, the LLM provider and the OIDC provider are not implemented (rule-based generator and local login instead).
 
 | Relationship | Pattern | Who dictates the model | Why | Main risk |
 | --- | --- | --- | --- | --- |
@@ -75,7 +75,7 @@ sequenceDiagram
     else readable
         A-->>P: HRIS_EXPORT_DTO
         P->>T: ToOrganization(dto)
-        alt unknown Supervisor / missing column
+        alt invalid row / missing column
             T-->>H: InvalidBoardImportException / MissingImportColumnsException (422)
         else valid
             T-->>H: OrganizationSnapshot (NodeName, DepartmentName)
@@ -87,7 +87,9 @@ sequenceDiagram
 ```csharp
 public interface IEmployeeDirectoryPort
 {
-    Task<OrganizationSnapshot> ReadOrganizationAsync(Stream employeeExport, CancellationToken ct = default);
+    // mapping == null -> the HRIS column names below (all six columns required)
+    Task<OrganizationSnapshot> ReadOrganizationAsync(Stream csv, ColumnMapping? mapping = null, CancellationToken ct = default);
+    Task<CsvPreview> PreviewAsync(Stream csv, CancellationToken ct = default);   // columns, first rows, suggested mapping
 }
 ```
 
@@ -95,7 +97,7 @@ Returns `OrganizationMember(EmployeeId, NodeName Name, Title, DepartmentName Dep
 
 **Classes** (`Infrastructure/Acl`, `internal sealed`): `HRIS_EXPORT_DTO`, `HRIS_EMPLOYEE_DTO`, `CsvHrisAdapter` (I/O), `HrisModelTranslator` (mapping), `HrisEmployeeDirectoryAcl` (facade).
 
-**Mapping** (values trimmed; empty or `NaN` = no value; row 2 = first employee):
+**Mapping** (values trimmed; empty or exactly `NaN` = no value – `Nan` is a real first name; row 2 = first employee):
 
 | # | HRIS | Ours | Rule |
 | -- | --- | --- | --- |
@@ -107,8 +109,27 @@ Returns `OrganizationMember(EmployeeId, NodeName Name, Title, DepartmentName Dep
 | 6 | `Title` | `Title` | required |
 | 7 | `DepartmentType` | `DepartmentName` | required |
 | 8 | `Supervisor` empty / `NaN` | `null` | top of hierarchy |
-| 9 | `Supervisor` = known `EmpID` | `SupervisorEmployeeId` | connection supervisor → employee, weight 1.0 |
-| 10 | `Supervisor` = own `EmpID` | `InvalidBoardImportException` | |
-| 11 | `Supervisor` unknown | `InvalidBoardImportException` | |
+| 9 | `Supervisor` = known `EmpID` | `SupervisorEmployeeId` | connection supervisor → employee, weight 1.0; an `EmpID` match wins over a name match |
+| 10 | `Supervisor` = own `EmpID` or own full name | `InvalidBoardImportException` | |
+| 11 | `Supervisor` = full name (`FirstName LastName`, trimmed, case-insensitive) of exactly one employee | `SupervisorEmployeeId` of that employee | the real HRIS export names supervisors, it does not give their `EmpID` |
+| 14 | `Supervisor` matches no employee (or a name shared by several) | placeholder member | one per distinct value (case-insensitive): `EmployeeId` `ext:<value>`, name = value, title `Supervisor (not in export)`, department `External`, no supervisor. A mistyped `EmpID` therefore creates a placeholder instead of an error |
 | 12 | unreadable / malformed CSV | `HrisIntegrationException` | HTTP 400 |
 | 13 | other columns | – | ignored |
+
+### Any CSV: column mapping
+
+The HRIS table above is the built-in mapping. For any other people table the caller sends a `ColumnMapping` (CSV header names; `null` = not mapped) and the same rules apply with the mapped columns:
+
+| Role | Rule when mapped | When not mapped |
+| --- | --- | --- |
+| `FullName` | one name column, required; wins over first/last | – |
+| `FirstName`, `LastName` | each mapped one is required; joined with a space | – |
+| `EmployeeId` | required, unique | generated `row-<file row>`; supervisors can then only match by name |
+| `Title` | required | `Employee` |
+| `Department` | required | `General` |
+| `Supervisor` | rows 8–11 and 14 above | no reporting lines |
+
+- A name source is mandatory: `FullName`, or at least one of `FirstName` / `LastName` → else `InvalidColumnMappingException` (`board_import.invalid_mapping`).
+- A mapped column that is not in the header → `MissingImportColumnsException`.
+- Bad rows still reject the whole file (`InvalidBoardImportException`, message names the mapped column and the row).
+- `PreviewAsync` returns the header, up to 5 rows, the row count and a **suggested** mapping guessed from common header names (`Employee ID`, `Full Name`, `Job Title`, `Reports To`, …). Only a suggestion: the caller confirms it.

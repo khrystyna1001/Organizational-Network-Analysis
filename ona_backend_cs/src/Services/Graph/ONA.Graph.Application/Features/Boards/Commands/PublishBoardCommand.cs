@@ -1,6 +1,8 @@
 using ONA.Graph.Application.Abstractions;
 using ONA.Graph.Application.Abstractions.Messaging;
 using ONA.Graph.Application.DTOs;
+using ONA.Graph.Application.Events;
+using ONA.Graph.Application.Ports;
 using ONA.Graph.Domain.Exceptions;
 
 namespace ONA.Graph.Application.Features.Boards.Commands;
@@ -12,7 +14,9 @@ namespace ONA.Graph.Application.Features.Boards.Commands;
 /// </summary>
 public sealed record PublishBoardCommand(string BoardId) : ICommand<BoardDto>;
 
-public sealed class PublishBoardCommandHandler(IBoardRepository repository)
+public sealed class PublishBoardCommandHandler(
+    IBoardRepository repository,
+    IGraphEventPublisher eventPublisher)
     : ICommandHandler<PublishBoardCommand, BoardDto>
 {
     public async Task<BoardDto> HandleAsync(
@@ -26,6 +30,24 @@ public sealed class PublishBoardCommandHandler(IBoardRepository repository)
         board.PublishGraphVersion();
 
         await repository.SaveAsync(board, cancellationToken);
+
+        // At-least-once, no outbox: the event is sent after the commit. A broker failure must not
+        // fail the request or undo the publication (the Kafka adapter logs the failure).
+        try
+        {
+            await eventPublisher.PublishGraphVersionPublishedAsync(
+                new GraphVersionPublished(
+                    Guid.NewGuid().ToString(),
+                    DateTimeOffset.UtcNow,
+                    board.Id,
+                    board.CurrentGraphVersionId!),
+                cancellationToken);
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Swallowed on purpose (see above).
+        }
+
         return BoardDto.FromDomain(board);
     }
 }

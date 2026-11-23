@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using ONA.Graph.Application.Abstractions;
 using ONA.Graph.Application.Abstractions.Messaging;
 using ONA.Graph.Application.DTOs;
@@ -8,6 +10,7 @@ using ONA.Graph.Application.Features.Boards.Queries;
 using ONA.Graph.Application.Ports;
 using ONA.Graph.Application.Services;
 using ONA.Graph.Infrastructure.Acl;
+using ONA.Graph.Infrastructure.Messaging;
 using ONA.Graph.Infrastructure.Persistence;
 using ONA.Graph.Infrastructure.Persistence.Repositories;
 using ONA.Graph.Infrastructure.Persistence.Seeders;
@@ -44,6 +47,15 @@ public static class DependencyInjection
         services.AddSingleton<CsvHrisAdapter>();
         services.AddScoped<IEmployeeDirectoryPort, HrisEmployeeDirectoryAcl>();
 
+        // Kafka is optional: without Kafka:BootstrapServers events are dropped (no-op).
+        services.AddSingleton<IGraphEventPublisher>(provider =>
+        {
+            var servers = provider.GetService<IConfiguration>()?["Kafka:BootstrapServers"];
+            return string.IsNullOrWhiteSpace(servers)
+                ? new NoOpEventPublisher()
+                : new KafkaEventPublisher(servers, provider.GetRequiredService<ILogger<KafkaEventPublisher>>());
+        });
+
         services.AddGraphApplication();
         return services;
     }
@@ -63,6 +75,8 @@ public static class DependencyInjection
 
         services.AddScoped<IQueryHandler<GetBoardByIdQuery, BoardDto?>, GetBoardByIdQueryHandler>();
         services.AddScoped<IQueryHandler<GetAllBoardsQuery, IReadOnlyList<BoardDto>>, GetAllBoardsQueryHandler>();
+        services.AddScoped<IQueryHandler<GetGraphSnapshotQuery, GraphSnapshotDto>, GetGraphSnapshotQueryHandler>();
+        services.AddScoped<IQueryHandler<PreviewCsvQuery, CsvPreview>, PreviewCsvQueryHandler>();
 
         return services;
     }

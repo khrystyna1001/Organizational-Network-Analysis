@@ -33,14 +33,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build image
-        run: docker build -t ona-graph-api:${{ github.sha }} .
-      - name: Smoke test with MySQL
+        run: docker build --build-arg SERVICE=Graph -t ona-graph-api:${{ github.sha }} .
+      - name: Smoke test (all services through the nginx proxy)
         run: |
           docker compose up -d --build
-          for i in $(seq 1 30); do
-            curl -fs http://localhost:5056/ && exit_code=0 && break || exit_code=1
-            sleep 2
+          exit_code=0
+          # APIs answer 401 without a token (up and protected); the UI health answers 200.
+          for spec in "api/v1/boards:401" "api/v1/users/me:401" "api/v1/analysis-runs:401" "api/v1/recommendations:401" "index.html:200"; do
+            path=${spec%%:*}; want=${spec##*:}; ok=1
+            for i in $(seq 1 60); do
+              code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/$path)
+              [ "$code" = "$want" ] && ok=0 && break
+              sleep 3
+            done
+            echo "$path -> $code (want $want) $([ $ok -eq 0 ] && echo ok || echo FAILED)"
+            [ $ok -eq 0 ] || exit_code=1
           done
-          docker compose logs graph-api
+          docker compose logs graph-api identity-api analysis-api insights-api proxy
           docker compose down -v
           exit $exit_code

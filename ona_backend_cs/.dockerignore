@@ -6,3 +6,7 @@
 **/*.user
 **/.DS_Store
 .git
+frontend
+nginx
+docs
+sample

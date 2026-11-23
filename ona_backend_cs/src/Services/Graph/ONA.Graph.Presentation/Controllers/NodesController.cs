@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ONA.Graph.Application.DTOs;
 using ONA.Graph.Application.Services;
@@ -6,6 +7,7 @@ using ONA.Graph.Presentation.Contracts;
 namespace ONA.Graph.Presentation.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/v1/nodes")]
 public sealed class NodesController(IGraphService service) : ControllerBase
 {

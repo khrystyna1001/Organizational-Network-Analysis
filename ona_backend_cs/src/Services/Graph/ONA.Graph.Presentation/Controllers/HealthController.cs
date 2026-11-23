@@ -1,8 +1,10 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ONA.Graph.Presentation.Controllers;
 
 [ApiController]
+[AllowAnonymous]
 public sealed class HealthController : ControllerBase
 {
     [HttpGet("/")]
@@ -10,6 +12,6 @@ public sealed class HealthController : ControllerBase
         Ok(new
         {
             status = "online",
-            message = "ONA Engine with Microsoft Graph & Gemini AI is ready."
+            service = "ONA Graph API"
         });
 }

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ONA.Graph.Application.Abstractions.Messaging;
 using ONA.Graph.Application.DTOs;
@@ -12,6 +13,7 @@ namespace ONA.Graph.Presentation.Controllers;
 /// writes go through the Board aggregate (tracked), reads use AsNoTracking projections.
 /// </summary>
 [ApiController]
+[Authorize]
 [Route("api/v1/boards")]
 public sealed class BoardsController : ControllerBase
 {
@@ -52,6 +54,17 @@ public sealed class BoardsController : ControllerBase
             ? Problem(statusCode: StatusCodes.Status404NotFound, title: "Board not found")
             : Ok(board);
     }
+
+    // READ (snapshot of the current GraphVersion, consumed by Analysis)
+    [HttpGet("{boardId}/snapshot")]
+    [ProducesResponseType<GraphSnapshotDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<GraphSnapshotDto>> GetSnapshot(
+        string boardId,
+        [FromServices] IQueryHandler<GetGraphSnapshotQuery, GraphSnapshotDto> handler,
+        CancellationToken cancellationToken) =>
+        Ok(await handler.HandleAsync(new GetGraphSnapshotQuery(boardId), cancellationToken));
 
     // UPDATE (details)
     [HttpPut("{boardId}")]
@@ -102,6 +115,7 @@ public sealed class BoardsController : ControllerBase
 
     // DELETE (guarded: Published boards must be archived first)
     [HttpDelete("{boardId}")]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]

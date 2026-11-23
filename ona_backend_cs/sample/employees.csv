@@ -1,0 +1,15 @@
+EmpID,FirstName,LastName,Title,DepartmentType,Supervisor
+1,Alex,Morgan,CEO,Executive Office,
+2,Dana,Lee,VP Engineering,Software Engineering,1
+3,Chris,Park,VP Sales,Sales,1
+4,Priya,Nair,Engineering Manager,Software Engineering,2
+5,Tom,Weber,Engineering Manager,Software Engineering,2
+6,Ivy,Chen,Developer,Software Engineering,4
+7,Omar,Haddad,Developer,Software Engineering,4
+8,Lena,Fischer,Developer,Software Engineering,4
+9,Noah,Brown,Developer,Software Engineering,5
+10,Mia,Rossi,Developer,Software Engineering,5
+11,Sofia,Ivanova,Sales Manager,Sales,3
+12,Luke,Evans,Sales Representative,Sales,11
+13,Ana,Silva,Sales Representative,Sales,11
+14,Kai,Tanaka,Sales Representative,Sales,11

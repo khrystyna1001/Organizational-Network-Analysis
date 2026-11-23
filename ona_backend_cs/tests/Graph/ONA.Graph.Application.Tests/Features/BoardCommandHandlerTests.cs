@@ -55,7 +55,7 @@ public sealed class BoardCommandHandlerTests
         board.AddNode("Alex", "Director", "Engineering");
 
         await new BuildBoardGraphCommandHandler(_repository).HandleAsync(new BuildBoardGraphCommand("b1"));
-        var result = await new PublishBoardCommandHandler(_repository).HandleAsync(new PublishBoardCommand("b1"));
+        var result = await new PublishBoardCommandHandler(_repository, new RecordingEventPublisher()).HandleAsync(new PublishBoardCommand("b1"));
 
         Assert.Equal(nameof(BoardLifecycle.Published), result.Lifecycle);
         Assert.NotNull(result.CurrentGraphVersionId);
@@ -68,7 +68,7 @@ public sealed class BoardCommandHandlerTests
         _repository.Seed(new Board("b1", "Engineering", null));
 
         await Assert.ThrowsAsync<InvalidGraphStateTransitionException>(
-            () => new PublishBoardCommandHandler(_repository).HandleAsync(new PublishBoardCommand("b1")));
+            () => new PublishBoardCommandHandler(_repository, new RecordingEventPublisher()).HandleAsync(new PublishBoardCommand("b1")));
 
         Assert.Equal(0, _repository.SaveCount);
     }
@@ -153,12 +153,62 @@ public sealed class BoardCommandHandlerTests
         Assert.Equal("Management", board.Nodes.Single(n => n.Name == "Alex One").Department);
     }
 
-    /// <summary>Stub of the outbound port: returns already-translated data (the ACL is tested separately).</summary>
-    private sealed class StubEmployeeDirectory(OrganizationSnapshot snapshot) : IEmployeeDirectoryPort
+    [Fact]
+    public async Task ImportBoardFromHris_ShouldPassTheColumnMappingToThePort()
     {
+        var port = new StubEmployeeDirectory(new OrganizationSnapshot(
+        [
+            new OrganizationMember("row-2", new NodeName("Alex One"), "Employee", new DepartmentName("General"), null)
+        ]));
+        var mapping = new ColumnMapping(FullName: "Name", Supervisor: "Boss");
+
+        await new ImportBoardFromHrisCommandHandler(port, _repository)
+            .HandleAsync(new ImportBoardFromHrisCommand("Any CSV", Stream.Null, mapping));
+
+        Assert.Equal(mapping, port.ReceivedMapping);
+    }
+
+    [Fact]
+    public async Task ImportBoardFromHris_WithoutMapping_UsesTheHrisDefault()
+    {
+        var port = new StubEmployeeDirectory(new OrganizationSnapshot(
+        [
+            new OrganizationMember("1", new NodeName("Alex One"), "Director", new DepartmentName("Management"), null)
+        ]));
+
+        await new ImportBoardFromHrisCommandHandler(port, _repository)
+            .HandleAsync(new ImportBoardFromHrisCommand("HRIS", Stream.Null));
+
+        Assert.Null(port.ReceivedMapping);   // null = the port applies ColumnMapping.Hris
+    }
+
+    [Fact]
+    public async Task PreviewCsv_ReturnsWhatThePortSuggestsAndSavesNothing()
+    {
+        var preview = new CsvPreview(["Name", "Boss"], [["Alex", ""]], 1, new ColumnMapping(FullName: "Name", Supervisor: "Boss"));
+
+        var result = await new PreviewCsvQueryHandler(new StubEmployeeDirectory(new OrganizationSnapshot([]), preview))
+            .HandleAsync(new PreviewCsvQuery(Stream.Null));
+
+        Assert.Equal(preview, result);
+        Assert.Empty(_repository.Boards);
+    }
+
+    /// <summary>Stub of the outbound port: returns already-translated data (the ACL is tested separately).</summary>
+    private sealed class StubEmployeeDirectory(OrganizationSnapshot snapshot, CsvPreview? preview = null) : IEmployeeDirectoryPort
+    {
+        public ColumnMapping? ReceivedMapping { get; private set; }
+
         public Task<OrganizationSnapshot> ReadOrganizationAsync(
             Stream employeeExport,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(snapshot);
+            ColumnMapping? mapping = null,
+            CancellationToken cancellationToken = default)
+        {
+            ReceivedMapping = mapping;
+            return Task.FromResult(snapshot);
+        }
+
+        public Task<CsvPreview> PreviewAsync(Stream employeeExport, CancellationToken cancellationToken = default) =>
+            Task.FromResult(preview ?? new CsvPreview([], [], 0, new ColumnMapping()));
     }
 }

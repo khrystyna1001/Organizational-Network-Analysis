@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ONA – Organization Network Analyzer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="vendor/vis-network.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <!-- ===================== sign in ===================== -->
+  <main id="auth" class="auth" hidden>
+    <div class="auth-box">
+      <div class="brand big"><b>ONA</b><span>Organization Network Analyzer</span></div>
+      <div class="card">
+        <div class="tabs" id="auth-tabs">
+          <button class="tab active" data-tab="login">Sign in</button>
+          <button class="tab" data-tab="register">Create account</button>
+          <button class="tab" data-tab="reset">Forgot password</button>
+        </div>
+
+        <form id="login-form" class="pane" data-pane="login">
+          <label>Email<input name="email" type="email" required autocomplete="email"></label>
+          <label>Password<input name="password" type="password" required autocomplete="current-password"></label>
+          <button class="btn primary block" type="submit">Sign in</button>
+        </form>
+
+        <form id="register-form" class="pane" data-pane="register" hidden>
+          <label>Display name<input name="display_name" required autocomplete="name"></label>
+          <label>Email<input name="email" type="email" required autocomplete="email"></label>
+          <label>Password<input name="password" type="password" required autocomplete="new-password"></label>
+          <p class="hint">At least 8 characters, with a letter and a digit.</p>
+          <button class="btn primary block" type="submit">Create account</button>
+        </form>
+
+        <div class="pane" data-pane="reset" hidden>
+          <p class="hint">1. Request a token – it is emailed to you (Docker: open <a href="http://localhost:8025" target="_blank" rel="noopener">localhost:8025</a>). 2. Paste it below with a new password.</p>
+          <form id="reset-request-form">
+            <label>Email<input name="email" type="email" required></label>
+            <button class="btn block" type="submit">Email me a reset token</button>
+          </form>
+          <hr>
+          <form id="reset-confirm-form">
+            <label>Email<input name="email" type="email" required></label>
+            <label>Reset token<input name="token" required autocomplete="off"></label>
+            <label>New password<input name="new_password" type="password" required autocomplete="new-password"></label>
+            <button class="btn primary block" type="submit">Set new password</button>
+          </form>
+        </div>
+        <p id="auth-error" class="error" hidden></p>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===================== app shell ===================== -->
+  <div id="shell" class="shell" hidden>
+    <aside class="sidebar">
+      <div class="brand"><b>ONA</b><span>Organization Network Analyzer</span></div>
+      <div class="usercard">
+        <div class="avatar" id="user-avatar"></div>
+        <div><div id="user-name" class="strong"></div><div id="user-role" class="mono tiny muted upper"></div></div>
+      </div>
+
+      <div class="sec">Boards</div>
+      <select id="board-select" aria-label="Board"></select>
+
+      <details class="box" id="import-box">
+        <summary>Import employee CSV</summary>
+        <form id="import-form">
+          <p class="hint">Any people table as CSV: one row per person. You match the columns in the next step.</p>
+          <label>Board name<input name="board_name" placeholder="e.g. Engineering"></label>
+          <input name="file" type="file" accept=".csv" required>
+          <button class="btn primary block" type="submit">Choose columns…</button>
+        </form>
+      </details>
+
+      <div class="sec">Account</div>
+      <details class="box">
+        <summary>Profile &amp; password</summary>
+        <form id="profile-form">
+          <label>Display name<input name="display_name" required></label>
+          <button class="btn block" type="submit">Save</button>
+        </form>
+        <hr>
+        <form id="password-form">
+          <label>Current password<input name="current_password" type="password" required autocomplete="current-password"></label>
+          <label>New password<input name="new_password" type="password" required autocomplete="new-password"></label>
+          <button class="btn block" type="submit">Change password</button>
+        </form>
+      </details>
+
+      <details class="box" id="admin-box" hidden>
+        <summary>Users (admin)</summary>
+        <div id="users-list"></div>
+        <form id="role-form">
+          <label>User<select name="user" id="role-user"></select></label>
+          <label>Role<select name="role"><option>User</option><option>Admin</option></select></label>
+          <button class="btn block" type="submit">Change role</button>
+        </form>
+      </details>
+
+      <button class="btn block" id="signout" type="button">Sign out</button>
+    </aside>
+
+    <main class="main">
+      <section id="empty" class="card" hidden>
+        <h2>Welcome</h2>
+        <p class="muted">No boards yet. Import an employee CSV in the sidebar to build your first network.</p>
+      </section>
+
+      <div id="board-view" hidden>
+        <header class="top">
+          <div>
+            <div><span class="kicker">Network board</span><span class="kicker" id="board-state"></span></div>
+            <h1 id="board-name"></h1>
+            <div class="muted small" id="board-meta"></div>
+          </div>
+          <div class="actions" id="actions"></div>
+        </header>
+        <p class="muted small" id="board-note"></p>
+
+        <section class="kpis" id="kpis"></section>
+
+        <section class="split">
+          <div class="card canvas">
+            <div class="card-head">
+              <div class="panel-title">Network topology</div>
+              <div class="seg-row">
+                <div class="seg" id="layout-seg" role="group" aria-label="Layout">
+                  <button data-v="hierarchy" class="on">Hierarchy</button><button data-v="force">Force</button>
+                </div>
+                <div class="seg" id="zoom-seg" role="group" aria-label="Zoom">
+                  <button data-v="out" title="Zoom out" aria-label="Zoom out">−</button><button data-v="in" title="Zoom in" aria-label="Zoom in">+</button><button data-v="fit" title="Fit to screen">Fit</button>
+                </div>
+                <div class="seg" id="labels-seg" role="group" aria-label="Labels">
+                  <button data-v="smart" class="on">Key</button><button data-v="all">All</button><button data-v="none">None</button>
+                </div>
+              </div>
+            </div>
+            <div id="graph" class="graph"></div>
+            <div class="legend" id="legend"></div>
+            <div class="hint" id="graph-hint"></div>
+          </div>
+
+          <div class="side">
+            <section class="card" id="inspector"></section>
+            <section class="card" id="ranking"></section>
+          </div>
+        </section>
+
+        <section>
+          <div class="panel-title big">Recommendations</div>
+          <p class="muted small">Generated per bottleneck. Only an approved recommendation can lead to a change.</p>
+          <div id="recs" class="recs"></div>
+        </section>
+
+        <section class="card roster">
+          <div class="card-head">
+            <div>
+              <div class="panel-title">People roster</div>
+              <div class="muted small">Everyone on the board with their position in the network.</div>
+            </div>
+            <input id="search" type="search" placeholder="Search name, title or department…" aria-label="Search people">
+          </div>
+          <div class="table-wrap"><table id="roster-table"></table></div>
+          <div class="muted small" id="roster-count"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <dialog id="mapping-dialog" aria-labelledby="mapping-title">
+    <form id="mapping-form">
+      <h2 id="mapping-title">Match your columns</h2>
+      <p class="muted small" id="mapping-file"></p>
+      <label>Board name<input name="board_name" required></label>
+      <div class="map-grid" id="map-grid"></div>
+      <p class="hint">Name: use <b>Full name</b>, or <b>First</b> and/or <b>Last name</b>. Unmapped title becomes "Employee" and unmapped department "General". The boss can be an ID or a full name; a boss who is not in the file becomes a placeholder person. A bad row rejects the whole file.</p>
+      <div class="table-wrap preview"><table id="preview-table"></table></div>
+      <p id="mapping-error" class="error" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" class="btn" id="mapping-cancel">Cancel</button>
+        <button type="submit" class="btn primary" id="mapping-submit">Import</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="vendor/vis-network.min.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

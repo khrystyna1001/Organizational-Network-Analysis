@@ -38,7 +38,6 @@ public sealed class HrisModelTranslatorTests
 
     [Theory]
     [InlineData("NaN")]
-    [InlineData("nan")]
     [InlineData("   ")]
     [InlineData(null)]
     public void ToOrganization_WhenSupervisorIsHrisMissingValue_MapsToTopOfHierarchy(string? supervisor)
@@ -48,6 +47,20 @@ public sealed class HrisModelTranslatorTests
         var member = Assert.Single(_sut.ToOrganization(export).Members);
 
         Assert.Null(member.SupervisorEmployeeId);
+    }
+
+    [Theory]
+    [InlineData("Nan")]
+    [InlineData("nan")]
+    public void ToOrganization_WhenNameOnlyLooksLikeNaN_KeepsItAsARealName(string firstName)
+    {
+        // Regression: the HRIS marks an empty cell with the exact literal "NaN"; "Nan" is a real first name
+        // (employee_data.csv row 893 "Nan Singh" was rejected as "FirstName: value is required").
+        var export = Export(Row("100", firstName, "Singh", "Administrative Assistant", "Admin Offices", ""));
+
+        var member = Assert.Single(_sut.ToOrganization(export).Members);
+
+        Assert.Equal($"{firstName} Singh", member.Name.Value);
     }
 
     [Fact]
@@ -124,14 +137,77 @@ public sealed class HrisModelTranslatorTests
     }
 
     [Fact]
-    public void ToOrganization_WhenSupervisorUnknown_ThrowsInvalidBoardImportException()
+    public void ToOrganization_WhenSupervisorIsNotInExport_CreatesOnePlaceholderSharedByAllItsReports()
     {
-        var export = Export(Row("100", "Alex", "One", "Director", "Management", "999"));
+        var export = Export(
+            Row("100", "Alex", "One", "Director", "Management", " Donald Decker "),
+            Row("101", "Sam", "Smith", "Manager", "Engineering", "donald decker"));
+
+        var members = _sut.ToOrganization(export).Members;
+
+        Assert.Equal(3, members.Count);
+        var placeholder = members[2];
+        Assert.Equal("ext:Donald Decker", placeholder.EmployeeId);
+        Assert.Equal("Donald Decker", placeholder.Name.Value);
+        Assert.Equal("Supervisor (not in export)", placeholder.Title);
+        Assert.Equal("External", placeholder.Department.Value);
+        Assert.Null(placeholder.SupervisorEmployeeId);
+        Assert.Equal(placeholder.EmployeeId, members[0].SupervisorEmployeeId);
+        Assert.Equal(placeholder.EmployeeId, members[1].SupervisorEmployeeId);
+    }
+
+    [Fact]
+    public void ToOrganization_WhenSupervisorIsTheFullNameOfOneEmployee_LinksToThatEmployee()
+    {
+        var export = Export(
+            Row("100", "Alex", "One", "Director", "Management", null),
+            Row("101", "Sam", "Smith", "Manager", "Engineering", " alex ONE "));
+
+        var members = _sut.ToOrganization(export).Members;
+
+        Assert.Equal(2, members.Count);
+        Assert.Equal("100", members[1].SupervisorEmployeeId);
+    }
+
+    [Fact]
+    public void ToOrganization_WhenSupervisorNameIsSharedByTwoEmployees_UsesAPlaceholderInsteadOfGuessing()
+    {
+        var export = Export(
+            Row("100", "Pat", "Lee", "Developer", "Engineering", null),
+            Row("101", "Pat", "Lee", "Tester", "Engineering", null),
+            Row("102", "Sam", "Smith", "Manager", "Engineering", "Pat Lee"));
+
+        var members = _sut.ToOrganization(export).Members;
+
+        Assert.Equal(4, members.Count);
+        Assert.Equal("ext:Pat Lee", members[2].SupervisorEmployeeId);
+        Assert.Equal("External", members[3].Department.Value);
+    }
+
+    [Fact]
+    public void ToOrganization_WhenEmpIdAndNameBothMatch_TheEmpIdWins()
+    {
+        var export = Export(
+            Row("200", "Bob", "Ray", "Director", "Management", null),
+            Row("100", "200", "Smith", "Manager", "Engineering", null),
+            Row("101", "Sam", "Jones", "Developer", "Engineering", "200 Smith"),
+            Row("102", "Kim", "Park", "Developer", "Engineering", "200"));
+
+        var members = _sut.ToOrganization(export).Members;
+
+        Assert.Equal("100", members[2].SupervisorEmployeeId);   // matched by full name "200 Smith"
+        Assert.Equal("200", members[3].SupervisorEmployeeId);   // "200" is an EmpID, not the first name of employee 100
+        Assert.Equal(4, members.Count);
+    }
+
+    [Fact]
+    public void ToOrganization_WhenEmployeeNamesThemselfAsSupervisor_ThrowsInvalidBoardImportException()
+    {
+        var export = Export(Row("100", "Alex", "One", "Director", "Management", "Alex One"));
 
         var exception = Assert.Throws<InvalidBoardImportException>(() => _sut.ToOrganization(export));
 
-        Assert.Equal("board_import.invalid", exception.Code);
-        Assert.Contains("'999' does not exist", exception.Message);
+        Assert.Contains("cannot supervise themself", exception.Message);
     }
 
     [Fact]
