@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ONA – Organization Network Analyzer</title>
+  <meta name="theme-color" content="#0C1017">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2300D2FF'/%3E%3Cstop offset='1' stop-color='%236366F1'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23g)'/%3E%3Cg fill='%23fff'%3E%3Ccircle cx='10' cy='11' r='3'/%3E%3Ccircle cx='23' cy='12' r='3'/%3E%3Ccircle cx='16' cy='23' r='3'/%3E%3C/g%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
@@ -18,10 +21,10 @@
     <div class="auth-box">
       <div class="brand big"><b>ONA</b><span>Organization Network Analyzer</span></div>
       <div class="card">
-        <div class="tabs" id="auth-tabs">
-          <button class="tab active" data-tab="login">Sign in</button>
-          <button class="tab" data-tab="register">Create account</button>
-          <button class="tab" data-tab="reset">Forgot password</button>
+        <div class="tabs" id="auth-tabs" role="tablist">
+          <button class="tab active" data-tab="login" role="tab" aria-selected="true">Sign in</button>
+          <button class="tab" data-tab="register" role="tab" aria-selected="false">Create account</button>
+          <button class="tab" data-tab="reset" role="tab" aria-selected="false">Forgot password</button>
         </div>
 
         <form id="login-form" class="pane" data-pane="login">
@@ -110,7 +113,7 @@
     <main class="main">
       <section id="empty" class="card" hidden>
         <h2>Welcome</h2>
-        <p class="muted">No boards yet. Import an employee CSV in the sidebar to build your first network.</p>
+        <p class="muted">No boards yet. Import an employee CSV from the sidebar, then build and publish the board to see who your organization depends on.</p>
       </section>
 
       <div id="board-view" hidden>
@@ -119,6 +122,7 @@
             <div><span class="kicker">Network board</span><span class="kicker" id="board-state"></span></div>
             <h1 id="board-name"></h1>
             <div class="muted small" id="board-meta"></div>
+            <ol class="stepper" id="stepper" aria-label="Board lifecycle"></ol>
           </div>
           <div class="actions" id="actions"></div>
         </header>
@@ -154,7 +158,7 @@
         </section>
 
         <section>
-          <div class="panel-title big">Recommendations</div>
+          <div class="panel-title big">Recommendations <span class="count" id="recs-count" hidden></span></div>
           <p class="muted small">Generated per bottleneck. Only an approved recommendation can lead to a change.</p>
           <div id="recs" class="recs"></div>
         </section>

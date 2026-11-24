@@ -6,6 +6,8 @@ info:
   version: v1
 servers:
   - url: http://localhost:5056/
+security:
+  - bearerAuth: []
 paths:
   /api/v1/boards:
     post:
@@ -198,6 +200,36 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
             text/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /api/v1/boards/{boardId}/snapshot:
+    get:
+      tags:
+        - Boards
+      summary: Nodes and connections of the published graph version (used by Analysis)
+      parameters:
+        - name: boardId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GraphSnapshotDto"
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "422":
+          description: Board is not published (board.graph_not_published)
+          content:
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
   /api/v1/boards/{boardId}/build:
@@ -543,6 +575,7 @@ paths:
     get:
       tags:
         - Health
+      security: []
       responses:
         "200":
           description: OK
@@ -748,38 +781,26 @@ paths:
     post:
       tags:
         - OrganizationImport
+      summary: Import a people CSV as a new Draft board
+      description: One row per person. Without `mapping` the HR export columns are expected
+        (EmpID, FirstName, LastName, Title, DepartmentType, Supervisor).
       requestBody:
         content:
-          application/x-www-form-urlencoded:
+          multipart/form-data:
             schema:
               type: object
-              allOf:
-                - type: object
-                  properties:
-                    ContentType:
-                      type: string
-                    ContentDisposition:
-                      type: string
-                    Headers:
-                      type: object
-                      additionalProperties:
-                        type: array
-                        items:
-                          type: string
-                    Length:
-                      pattern: ^-?(?:0|[1-9]\d*)$
-                      type:
-                        - integer
-                        - string
-                      format: int64
-                    Name:
-                      type: string
-                    FileName:
-                      type: string
-                - type: object
-                  properties:
-                    board_name:
-                      type: string
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                board_name:
+                  type: string
+                mapping:
+                  type: string
+                  description: 'JSON, CSV header per role, e.g. {"full_name":"Name","supervisor":"Manager"}.
+                    Roles: employee_id, full_name, first_name, last_name, title, department, supervisor.'
         required: true
       responses:
         "200":
@@ -818,8 +839,123 @@ paths:
             text/json:
               schema:
                 $ref: "#/components/schemas/ProblemDetails"
+  /api/v1/data/preview:
+    post:
+      tags:
+        - OrganizationImport
+      summary: Columns, first rows and a suggested column mapping of a CSV. Nothing is saved.
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CsvPreview"
+        "400":
+          description: Missing file or unreadable CSV
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token from POST /api/v1/users/login (Identity). Only Admin may DELETE a board.
   schemas:
+    ColumnMapping:
+      type: object
+      description: CSV header name per role; null or blank = not mapped.
+      properties:
+        employee_id:
+          type:
+            - "null"
+            - string
+        full_name:
+          type:
+            - "null"
+            - string
+        first_name:
+          type:
+            - "null"
+            - string
+        last_name:
+          type:
+            - "null"
+            - string
+        title:
+          type:
+            - "null"
+            - string
+        department:
+          type:
+            - "null"
+            - string
+        supervisor:
+          type:
+            - "null"
+            - string
+    CsvPreview:
+      type: object
+      required:
+        - columns
+        - sample_rows
+        - row_count
+        - suggested_mapping
+      properties:
+        columns:
+          type: array
+          items:
+            type: string
+        sample_rows:
+          type: array
+          description: Up to 5 rows.
+          items:
+            type: array
+            items:
+              type: string
+        row_count:
+          type: integer
+          format: int32
+        suggested_mapping:
+          $ref: "#/components/schemas/ColumnMapping"
+    GraphSnapshotDto:
+      type: object
+      required:
+        - board_id
+        - graph_version_id
+        - lifecycle
+        - nodes
+        - connections
+      properties:
+        board_id:
+          type: string
+        graph_version_id:
+          type: string
+        lifecycle:
+          type: string
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/NodeDto"
+        connections:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConnectionDto"
     BoardDto:
       required:
         - id
@@ -838,18 +974,18 @@ components:
         lifecycle:
           type: string
           default: Draft
-        currentGraphVersionId:
+        current_graph_version_id:
           type:
             - "null"
             - string
-        nodeCount:
+        node_count:
           pattern: ^-?(?:0|[1-9]\d*)$
           type:
             - integer
             - string
           format: int32
           default: 0
-        connectionCount:
+        connection_count:
           pattern: ^-?(?:0|[1-9]\d*)$
           type:
             - integer
@@ -859,19 +995,19 @@ components:
     ConnectionDto:
       required:
         - id
-        - boardId
-        - sourceNodeId
-        - targetNodeId
+        - board_id
+        - source_node_id
+        - target_node_id
         - weight
       type: object
       properties:
         id:
           type: string
-        boardId:
+        board_id:
           type: string
-        sourceNodeId:
+        source_node_id:
           type: string
-        targetNodeId:
+        target_node_id:
           type: string
         weight:
           pattern: ^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$
@@ -893,16 +1029,16 @@ components:
             - string
     CreateConnectionRequest:
       required:
-        - boardId
+        - board_id
       type: object
       properties:
-        boardId:
+        board_id:
           type: string
-        sourceNodeId:
+        source_node_id:
           type:
             - "null"
             - string
-        targetNodeId:
+        target_node_id:
           type:
             - "null"
             - string
@@ -915,10 +1051,10 @@ components:
           format: double
     CreateNodeRequest:
       required:
-        - boardId
+        - board_id
       type: object
       properties:
-        boardId:
+        board_id:
           type: string
         name:
           type:
@@ -934,14 +1070,14 @@ components:
             - string
     ImportedMemberDto:
       required:
-        - employeeId
+        - employee_id
         - name
         - title
         - department
-        - supervisorEmployeeId
+        - supervisor_employee_id
       type: object
       properties:
-        employeeId:
+        employee_id:
           type: string
         name:
           type: string
@@ -949,14 +1085,14 @@ components:
           type: string
         department:
           type: string
-        supervisorEmployeeId:
+        supervisor_employee_id:
           type:
             - "null"
             - string
     NodeDto:
       required:
         - id
-        - boardId
+        - board_id
         - name
         - title
         - department
@@ -964,7 +1100,7 @@ components:
       properties:
         id:
           type: string
-        boardId:
+        board_id:
           type: string
         name:
           type: string
@@ -975,16 +1111,16 @@ components:
     OrganizationDataResponse:
       required:
         - status
-        - totalRows
+        - total_rows
         - data
-        - boardId
-        - nodesCreated
-        - connectionsCreated
+        - board_id
+        - nodes_created
+        - connections_created
       type: object
       properties:
         status:
           type: string
-        totalRows:
+        total_rows:
           pattern: ^-?(?:0|[1-9]\d*)$
           type:
             - integer
@@ -994,15 +1130,15 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ImportedMemberDto"
-        boardId:
+        board_id:
           type: string
-        nodesCreated:
+        nodes_created:
           pattern: ^-?(?:0|[1-9]\d*)$
           type:
             - integer
             - string
           format: int32
-        connectionsCreated:
+        connections_created:
           pattern: ^-?(?:0|[1-9]\d*)$
           type:
             - integer

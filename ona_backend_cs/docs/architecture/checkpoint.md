@@ -10,6 +10,7 @@ Short status for future agents. Rules: [`AGENTS.md`](../../AGENTS.md). Run/API: 
 | Analysis | Done: `AnalysisRun`, betweenness/degree/density metrics, bottleneck policy, HTTP adapter to Graph. |
 | Insights | Done: `Recommendation` per bottleneck, approve/reject, rule-based text generator, HTTP adapter to Analysis. |
 | Identity | Done: register, login (JWT), roles User/Admin, password reset by email, account edit, seeded admin. |
+| API contracts | OpenAPI 3.1 for all four services in `docs/contracts/` (`openapi-<Service>.yaml`), written to match the controllers; keep them in step with the code. |
 | Frontend | `frontend/` (plain HTML/CSS/JS served by the nginx proxy): sign in / register / reset password, import, lifecycle, interactive graph, inspector, recommendations, roster, account, admin users. |
 
 ## Decisions taken (change them in the docs first)

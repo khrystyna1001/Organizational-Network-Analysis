@@ -11,7 +11,7 @@
 
 Web UI: [`frontend/`](frontend) (plain HTML/CSS/JS, no build step: dark dashboard with graph, person inspector, recommendations, roster). An nginx proxy ([`nginx/nginx.conf`](nginx/nginx.conf)) is the single entry point on `http://localhost:8080`: `/api/v1/...` goes to the services, everything else to the UI.
 
-Rules for code and AI agents: [`AGENTS.md`](AGENTS.md). Design docs: [`docs/architecture`](docs/architecture).
+Rules for code and AI agents: [`AGENTS.md`](AGENTS.md). Design docs: [`docs/architecture`](docs/architecture). API contracts (OpenAPI 3.1, one per service, snake_case JSON): [Graph](docs/contracts/openapi-Graph.yaml), [Analysis](docs/contracts/openapi-Analysis.yaml), [Insights](docs/contracts/openapi-Insights.yaml), [Identity](docs/contracts/openapi-Identity.yaml). In Development each service also serves its own live copy at `/openapi/v1.json` and a UI at `/scalar/v1`.
 
 ## Structure
 
@@ -107,9 +107,9 @@ Identity issues a JWT (HS256) on login; every other API validates it with the sh
 
 | Service | Endpoints |
 | --- | --- |
-| Identity | anonymous: `POST /api/v1/users` (register), `POST /api/v1/users/login`, `POST /api/v1/users/password-reset/request` (always 202, emails a token), `POST /api/v1/users/password-reset/confirm`. Signed in: `GET/PUT /api/v1/users/me`, `POST /api/v1/users/me/password`. Admin: `GET /api/v1/users[/{id}]`, `PUT /api/v1/users/{id}/role` |
-| Analysis | `POST /api/v1/analysis-runs` `{board_id}`, `GET /api/v1/analysis-runs[?board_id=]`, `GET /api/v1/analysis-runs/{id}` |
-| Insights | `POST /api/v1/recommendations` `{analysis_run_id}`, `GET /api/v1/recommendations[?analysis_run_id=&status=]`, `GET /{id}`, `POST /{id}/respond` `{response: approve\|reject, comment}` (responder = token `sub`) |
+| Identity | anonymous: `POST /api/v1/users` (register), `POST /api/v1/users/login`, `POST /api/v1/users/password-reset/request` (always 202, emails a token), `POST /api/v1/users/password-reset/confirm`. Signed in: `GET/PUT /api/v1/users/me`, `POST /api/v1/users/me/password` (a wrong current password gives 401 `user.invalid_credentials`). Login returns `{access_token, token_type: "Bearer", expires_in, user}` (60 minutes by default, `Jwt:ExpiresMinutes`); the reset token is valid for 30 minutes. Registration always creates role `User`. Admin: `GET /api/v1/users[/{id}]`, `PUT /api/v1/users/{id}/role` |
+| Analysis | `POST /api/v1/analysis-runs` `{board_id}` (201, always a new run, needs a published board), `GET /api/v1/analysis-runs[?board_id=]` (newest first), `GET /api/v1/analysis-runs/{id}`. A run has `status` (`Running`, `Completed`, `Failed`), `metrics` (`node_count`, `connection_count`, `density`, `avg_degree`), `node_metrics` (`in_degree`, `out_degree`, `betweenness`, `is_bottleneck` per node) and `bottlenecks` (node ids) |
+| Insights | `POST /api/v1/recommendations` `{analysis_run_id}` (201, one per bottleneck of a Completed run, idempotent), `GET /api/v1/recommendations[?analysis_run_id=&status=delivered\|approved\|rejected]`, `GET /{id}`, `POST /{id}/respond` `{response: approve\|reject, comment ≤ 1000 chars}` (responder = token `sub`, answered once: Delivered → Approved \| Rejected) |
 
 ## Events (Kafka)
 
@@ -128,7 +128,7 @@ Problem Details (`application/problem+json`) with a `code` field:
 | Status | When |
 | --- | --- |
 | `400` | Invalid request, missing file, unreadable CSV |
-| `401` / `403` | Missing or invalid token / role not allowed; Identity also: wrong credentials |
+| `401` / `403` | Missing or invalid token (empty body) / role not allowed; Identity also: wrong credentials (problem with `user.invalid_credentials`) |
 | `409` | Identity: email already registered |
 | `404` | Board / node / connection / run / recommendation / user not found |
 | `422` | Business rule violated (e.g. `board.deletion_not_allowed`, `board_import.invalid`) |

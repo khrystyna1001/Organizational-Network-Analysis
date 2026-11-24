@@ -1,0 +1,442 @@
+openapi: 3.1.1
+info:
+  title: ONA Identity API
+  description: Registration, login (JWT), account management, password reset, and user administration (local credentials;
+    an external OIDC provider is a later target).
+  version: v1
+servers:
+- url: http://localhost:5187/
+  description: Run locally; through the Docker proxy use http://localhost:8080/
+security:
+- bearerAuth: []
+tags:
+- name: Registration
+- name: Password reset
+- name: Account
+- name: Administration
+- name: Health
+paths:
+  /api/v1/users:
+    post:
+      tags:
+      - Registration
+      security: &id001 []
+      summary: Register (role User)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterUserRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDto'
+          headers:
+            Location:
+              schema: &id002
+                type: string
+              description: /api/v1/users/{id}
+        '409':
+          description: '`user.duplicate_email`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: '`user.invalid_email`, `user.invalid_display_name`, `user.weak_password` (8+ characters with
+            a letter and a digit)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    get:
+      tags:
+      - Administration
+      summary: List all users (Admin)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/users/login:
+    post:
+      tags:
+      - Registration
+      security: *id001
+      summary: Sign in and get a JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResultDto'
+        '401':
+          description: '`user.invalid_credentials`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/users/password-reset/request:
+    post:
+      tags:
+      - Password reset
+      security: *id001
+      summary: Email a reset token
+      description: Always 202, whether or not the email is registered (no user enumeration). The token is valid
+        for 30 minutes; in Docker the mail is caught by Mailpit at http://localhost:8025.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+      responses:
+        '202':
+          description: Accepted
+  /api/v1/users/password-reset/confirm:
+    post:
+      tags:
+      - Password reset
+      security: *id001
+      summary: Set a new password with the emailed token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmPasswordResetRequest'
+      responses:
+        '204':
+          description: Password changed
+        '422':
+          description: '`user.invalid_reset_token`, `user.weak_password`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/users/me:
+    get:
+      tags:
+      - Account
+      summary: The signed-in user
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    put:
+      tags:
+      - Account
+      summary: Change the display name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          description: '`user.invalid_display_name`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/users/me/password:
+    post:
+      tags:
+      - Account
+      summary: Change the password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: Password changed
+        '401':
+          description: Missing/invalid token (no body), or the current password is wrong (problem with `user.invalid_credentials`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: '`user.weak_password`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/users/{userId}:
+    get:
+      tags:
+      - Administration
+      summary: Get a user (Admin)
+      parameters:
+      - name: userId
+        in: path
+        required: true
+        schema: *id002
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: '`user.not_found`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/users/{userId}/role:
+    put:
+      tags:
+      - Administration
+      summary: Change a user's role (Admin)
+      parameters:
+      - name: userId
+        in: path
+        required: true
+        schema: *id002
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeRoleRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: '`user.not_found`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: '`user.invalid_role`, `user.cannot_change_own_role`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /:
+    get:
+      tags:
+      - Health
+      summary: Liveness check (anonymous)
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: *id002
+                  service: *id002
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token from POST /api/v1/users/login (Identity service). HS256, claims sub, email, name,
+        role.
+  schemas:
+    RegisterUserRequest:
+      type: object
+      required:
+      - email
+      - display_name
+      - password
+      properties:
+        email: *id002
+        display_name:
+          type: string
+          maxLength: 100
+        password:
+          type: string
+          minLength: 8
+    LoginRequest:
+      type: object
+      required:
+      - email
+      - password
+      properties:
+        email: *id002
+        password: *id002
+    UpdateUserRequest:
+      type: object
+      required:
+      - display_name
+      properties:
+        display_name:
+          type: string
+          maxLength: 100
+    ChangePasswordRequest:
+      type: object
+      required:
+      - current_password
+      - new_password
+      properties:
+        current_password: *id002
+        new_password: *id002
+    ChangeRoleRequest:
+      type: object
+      required:
+      - role
+      properties:
+        role:
+          type: string
+          enum:
+          - User
+          - Admin
+    PasswordResetRequest:
+      type: object
+      required:
+      - email
+      properties:
+        email: *id002
+    ConfirmPasswordResetRequest:
+      type: object
+      required:
+      - email
+      - token
+      - new_password
+      properties:
+        email: *id002
+        token: *id002
+        new_password: *id002
+    UserDto:
+      type: object
+      description: Never contains the password hash or reset token.
+      required:
+      - id
+      - email
+      - display_name
+      - created_at
+      - role
+      properties:
+        id: *id002
+        email: *id002
+        display_name: *id002
+        created_at:
+          type: string
+          format: date-time
+        role:
+          type: string
+          enum:
+          - User
+          - Admin
+    LoginResultDto:
+      type: object
+      required:
+      - access_token
+      - token_type
+      - expires_in
+      - user
+      properties:
+        access_token: *id002
+        token_type:
+          type: string
+          const: Bearer
+        expires_in:
+          type: integer
+          format: int32
+          description: Seconds; `Jwt:ExpiresMinutes` x 60, default 3600
+        user:
+          $ref: '#/components/schemas/UserDto'
+    ProblemDetails:
+      type: object
+      description: RFC 7807 problem details (`application/problem+json`).
+      properties:
+        type:
+          type:
+          - 'null'
+          - string
+        title:
+          type:
+          - 'null'
+          - string
+        status:
+          type:
+          - 'null'
+          - integer
+          format: int32
+        detail:
+          type:
+          - 'null'
+          - string
+        instance:
+          type:
+          - 'null'
+          - string
+        code:
+          type:
+          - 'null'
+          - string
+          description: Stable machine-readable error code of a domain rule, e.g. `user.duplicate_email`. Absent
+            for technical errors.
+  responses:
+    Unauthorized:
+      description: Missing, invalid or expired access token (no body).
+    Forbidden:
+      description: The token's role is not allowed to call this endpoint (no body).
+    Unexpected:
+      description: Unexpected error (500).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'

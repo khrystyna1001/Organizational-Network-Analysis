@@ -6,8 +6,8 @@
 | --- | --- | --- | --- | --- |
 | **Graph** | Core | `Board` (`Node`, `Connection`), `GraphVersion`, `OrganizationImport` | ONA's value starts with an accurate, versioned organization network; graph rules (no self/duplicate links, immutable published versions) are ours and change with every new data source. | Rich Domain Model + Clean Architecture – invariants and the Board state machine need unit tests without a database. |
 | **Analysis** | Core | `AnalysisRun` | Bottleneck detection is the product's differentiator; thresholds and the "administrative activity vs. real bottleneck" policy will change often. | Rich Domain Model + Hexagonal – metric policies as strategies, runs must be reproducible for one `GraphVersionId`. |
-| **Insights** | Supporting | `Recommendation` | Needed to turn metrics into advice, but text generation is bought from an LLM provider; our part is delivery and the approve/reject workflow. | Transaction Script + adapter behind `ILlmPort` – few rules, main risk is the external call. |
-| **Identity** | Generic | `User` | Registration and login are solved the same way everywhere; we use an OAuth/OIDC provider. | Integration – thin adapter, provider model accepted as is. |
+| **Insights** | Supporting | `Recommendation` | Needed to turn metrics into advice, but text generation is bought from an LLM provider; our part is delivery and the approve/reject workflow. | Transaction Script + adapter behind a generator port – few rules, main risk is the external call. Implemented as `IInsightGeneratorPort` with a rule-based generator; an LLM adapter (`ILlmPort` in the original design) can replace it. |
+| **Identity** | Generic | `User` | Registration and login are solved the same way everywhere; the target is an OAuth/OIDC provider. Implemented: local accounts (PBKDF2 password hash, HS256 JWT, password reset by email). | Integration – thin adapter, provider model accepted as is (target); local `User` aggregate for now. |
 
 ### Bounded Context Canvas – Graph (Core)
 
@@ -17,8 +17,8 @@
 | Classification | Core subdomain; role: system of record for the organization network. |
 | Ubiquitous Language | **Board** – one organization network; **Node** – a person; **Connection** – directed, weighted relationship; **ConnectionWeight** – strength > 0; **Reporting line** – supervisor → employee connection; **GraphVersion** – immutable published snapshot; **Lifecycle** – Draft / Built / Published / Archived; **OrganizationImport** – one submitted HR export. |
 | Business rules | Connection endpoints belong to the same Board; no self-connection; one connection per direction; weight finite and > 0; empty graph cannot be built; Published graph is immutable; Published board cannot be deleted (see `stateDiagram-analysis.md`). |
-| Incoming | Commands: `CreateBoard`, `ImportBoardFromHris`, `AddNode`, `AddConnection`, `BuildNetworkGraph`, `PublishGraphVersion`, `ArchiveBoard`, `DeleteBoard`, `ApplyGraphUpdate` (target, from Insights). Queries: `GetBoardById`, `GetAllBoards`, nodes/connections by board. |
-| Outgoing | Events (target): `NetworkGraphBuilt`, `GraphVersionPublished { boardId, graphVersionId }` for Analysis. |
+| Incoming | Commands: `CreateBoard`, `RenameBoard`, `ImportBoardFromHris`, `BuildBoardGraph`, `PublishBoard`, `ArchiveBoard`, `DeleteBoard`; nodes and connections are added, changed and removed through `IGraphService`; `ApplyGraphUpdate` (target, from Insights, not implemented). Queries: `GetBoardById`, `GetAllBoards`, `GetGraphSnapshot`, `PreviewCsv`, nodes/connections by board. |
+| Outgoing | Event `GraphVersionPublished { board_id, graph_version_id }` for Analysis (Kafka, ADR-007) and `GET /boards/{id}/snapshot`. `NetworkGraphBuilt` is a target event, not implemented. |
 | Dependencies | HRIS export (ACL), Analysis (consumes versions), Insights (requests approved updates), Identity (`UserId` only). |
 
 ## 2. Context Map

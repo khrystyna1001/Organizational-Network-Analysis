@@ -10,7 +10,7 @@ Graph, Analysis, Insights and Identity are separate services. Analysis needs a g
 - Synchronous HTTP, one adapter per upstream in `Infrastructure/Acl`, hidden behind an Application port.
 - Graph publishes `GET /api/v1/boards/{id}/snapshot` (nodes, connections, `graph_version_id`). Analysis stores the `GraphVersionId` in every run.
 - Analysis publishes `GET /api/v1/analysis-runs/{id}`. Insights stores the run, version and board ids in every recommendation.
-- No Kafka/MediatR (the compose file still lists Kafka; it is unused).
+- No MediatR. Originally no message broker either; since [ADR-007](ADR-007-kafka-events-and-jwt.md) Kafka carries two events, while data is still read over HTTP.
 
 ## Consequences
 - Simple to run and test with fakes. A run needs Graph to be up when it starts.

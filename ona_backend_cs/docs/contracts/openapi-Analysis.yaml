@@ -1,0 +1,269 @@
+openapi: 3.1.1
+info:
+  title: ONA Analysis API
+  description: Calculate organizational network metrics and detect management bottlenecks for a published graph
+    version.
+  version: v1
+servers:
+- url: http://localhost:5139/
+  description: Run locally; through the Docker proxy use http://localhost:8080/
+security:
+- bearerAuth: []
+tags:
+- name: AnalysisRuns
+- name: Health
+paths:
+  /api/v1/analysis-runs:
+    post:
+      tags:
+      - AnalysisRuns
+      summary: Run an analysis on the published graph of a board
+      description: Reads `GET /api/v1/boards/{id}/snapshot` from Graph (forwarding the caller's token), calculates
+        the metrics and stores a new run bound to that `graph_version_id`. Always creates a new run. Publishes the
+        Kafka event `ona.analysis.completed` afterwards; a failed publish never fails the request.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartAnalysisRunRequest'
+      responses:
+        '201':
+          description: Run created (already Completed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisRunDto'
+          headers:
+            Location:
+              schema: &id001
+                type: string
+              description: /api/v1/analysis-runs/{id}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Board not found (`analysis_run.board_not_found`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: '`analysis_run.graph_not_published` (board has no published version), `analysis_run.invalid_identifier`
+            (blank `board_id`), `analysis_run.invalid_graph`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '502':
+          description: The Graph service could not be reached or understood
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          $ref: '#/components/responses/Unexpected'
+    get:
+      tags:
+      - AnalysisRuns
+      summary: List analysis runs, newest first
+      parameters:
+      - name: board_id
+        in: query
+        required: false
+        schema: *id001
+        description: Only runs of this board
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AnalysisRunDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/analysis-runs/{analysisRunId}:
+    get:
+      tags:
+      - AnalysisRuns
+      summary: Get one analysis run (used by Insights)
+      parameters:
+      - name: analysisRunId
+        in: path
+        required: true
+        schema: *id001
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisRunDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: '`analysis_run.not_found`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /:
+    get:
+      tags:
+      - Health
+      summary: Liveness check (anonymous)
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: *id001
+                  service: *id001
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token from POST /api/v1/users/login (Identity service). HS256, claims sub, email, name,
+        role.
+  schemas:
+    StartAnalysisRunRequest:
+      type: object
+      required:
+      - board_id
+      properties:
+        board_id: *id001
+    GraphMetricsDto:
+      type: object
+      required:
+      - node_count
+      - connection_count
+      - density
+      - avg_degree
+      properties:
+        node_count: &id002
+          type: integer
+          format: int32
+        connection_count: *id002
+        density:
+          type: number
+          format: double
+          description: connections / (n * (n - 1)); 0 when n <= 1
+        avg_degree:
+          type: number
+          format: double
+          description: connections / n
+    NodeMetricsDto:
+      type: object
+      required:
+      - node_id
+      - node_name
+      - in_degree
+      - out_degree
+      - betweenness
+      - is_bottleneck
+      properties:
+        node_id: *id001
+        node_name: *id001
+        in_degree: *id002
+        out_degree: *id002
+        betweenness:
+          type: number
+          format: double
+          description: Brandes betweenness on the directed, unweighted graph, normalised by (n-1)(n-2) when n >
+            2
+        is_bottleneck:
+          type: boolean
+          description: betweenness > 0 and >= mean + 1 population standard deviation of all nodes
+    AnalysisRunDto:
+      type: object
+      required:
+      - id
+      - board_id
+      - graph_version_id
+      - status
+      - started_at
+      - node_metrics
+      - bottlenecks
+      properties:
+        id: *id001
+        board_id: *id001
+        graph_version_id: *id001
+        status:
+          type: string
+          enum:
+          - Running
+          - Completed
+          - Failed
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type:
+          - 'null'
+          - string
+          format: date-time
+        error_message:
+          type:
+          - 'null'
+          - string
+        metrics:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/GraphMetricsDto'
+        node_metrics:
+          type: array
+          items:
+            $ref: '#/components/schemas/NodeMetricsDto'
+        bottlenecks:
+          type: array
+          items: *id001
+          description: node_id of every node with is_bottleneck = true
+    ProblemDetails:
+      type: object
+      description: RFC 7807 problem details (`application/problem+json`).
+      properties:
+        type:
+          type:
+          - 'null'
+          - string
+        title:
+          type:
+          - 'null'
+          - string
+        status:
+          type:
+          - 'null'
+          - integer
+          format: int32
+        detail:
+          type:
+          - 'null'
+          - string
+        instance:
+          type:
+          - 'null'
+          - string
+        code:
+          type:
+          - 'null'
+          - string
+          description: Stable machine-readable error code of a domain rule, e.g. `user.duplicate_email`. Absent
+            for technical errors.
+  responses:
+    Unauthorized:
+      description: Missing, invalid or expired access token (no body).
+    Forbidden:
+      description: The token's role is not allowed to call this endpoint (no body).
+    Unexpected:
+      description: Unexpected error (500).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'

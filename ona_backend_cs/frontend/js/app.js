@@ -89,6 +89,7 @@ async function signIn(email, password) {
 for (const tab of document.querySelectorAll("#auth-tabs .tab")) {
   tab.addEventListener("click", () => {
     for (const t of document.querySelectorAll("#auth-tabs .tab")) t.classList.toggle("active", t === tab);
+    for (const t of document.querySelectorAll("#auth-tabs .tab")) t.setAttribute("aria-selected", String(t === tab));
     for (const pane of document.querySelectorAll(".pane")) pane.hidden = pane.dataset.pane !== tab.dataset.tab;
     authError("");
   });
@@ -343,6 +344,9 @@ function renderHeader() {
   const published = board.current_graph_version_id !== null;
   $("board-name").textContent = board.name;
   $("board-state").textContent = board.lifecycle;
+  $("board-state").className = `kicker state-${board.lifecycle.toLowerCase()}`;
+  const steps = ["Draft", "Built", "Published", "Archived"], at = steps.indexOf(board.lifecycle);
+  $("stepper").replaceChildren(...steps.map((s, i) => h("li", { class: i < at ? "done" : i === at ? "current" : "", "aria-current": i === at ? "step" : false }, s)));
   $("board-meta").textContent = `${nodes.length} people · ${connections.length} reporting lines` +
     (published ? ` · version ${board.current_graph_version_id.slice(0, 8)}` : "");
   $("board-note").textContent = !published
@@ -501,6 +505,10 @@ function renderRanking() {
 function renderRecs() {
   const { recs, analysis } = state;
   const box = $("recs");
+  const pending = recs.filter((r) => r.status === "Delivered").length;
+  $("recs-count").hidden = !recs.length;
+  $("recs-count").textContent = pending ? `${pending} awaiting your decision` : `${recs.length} answered`;
+  $("recs-count").className = `count ${pending ? "pending" : ""}`;
   if (!analysis) { box.replaceChildren(h("p", { class: "hint" }, "Run an analysis first.")); return; }
   if (!recs.length) { box.replaceChildren(h("p", { class: "hint" }, "None yet – they are generated automatically after the analysis, or press “Insights”.")); return; }
   const chips = { Delivered: "info", Approved: "ok", Rejected: "mut" };

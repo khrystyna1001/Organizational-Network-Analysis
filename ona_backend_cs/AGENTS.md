@@ -53,7 +53,7 @@ CQRS: commands load tracked aggregates and call aggregate methods; queries use `
 
 ## 9. Other contexts
 - Same layering, CQRS and domain rules as Graph. No MediatR. Kafka only for the two events in ADR-007; reads stay on HTTP.
-- Every API is `[Authorize]` (JWT, shared `Jwt:*` config); only health is anonymous. Roles from the `role` claim. Consumers use a `Service` token. Events are published after the save and never fail the request; consumers are idempotent and commit only after handling.
+- Every API is `[Authorize]` (JWT, shared `Jwt:*` config); anonymous are only the health endpoint and Identity's register, login and password-reset endpoints. Roles from the `role` claim. Consumers use a `Service` token. Events are published after the save and never fail the request; consumers are idempotent and commit only after handling.
 - Without `Kafka:BootstrapServers` the publisher is a no-op and no consumer runs.
 - Cross-context calls go through an Application port + `Infrastructure/Acl` HTTP adapter; contexts share ids only, never code.
 - Analysis reads `GET /boards/{id}/snapshot`; Insights reads `GET /analysis-runs/{id}`.

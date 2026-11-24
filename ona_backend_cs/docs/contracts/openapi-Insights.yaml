@@ -1,0 +1,295 @@
+openapi: 3.1.1
+info:
+  title: ONA Insights API
+  description: Recommendations per bottleneck, and the approve / reject workflow.
+  version: v1
+servers:
+- url: http://localhost:5095/
+  description: Run locally; through the Docker proxy use http://localhost:8080/
+security:
+- bearerAuth: []
+tags:
+- name: Recommendations
+- name: Health
+paths:
+  /api/v1/recommendations:
+    post:
+      tags:
+      - Recommendations
+      summary: Generate recommendations for the bottlenecks of a Completed analysis run
+      description: 'One recommendation per bottleneck, delivered immediately (`Delivered`). Idempotent: a bottleneck
+        that already has a recommendation for this run keeps it and is returned again. The text comes from the rule-based
+        generator behind `IInsightGeneratorPort`.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateRecommendationsRequest'
+      responses:
+        '201':
+          description: Recommendations of the run (new and already existing)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecommendationDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: '`recommendation.analysis_run_not_found`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: '`recommendation.analysis_run_not_completed`, `recommendation.no_bottlenecks`, `recommendation.invalid_identifier`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '502':
+          description: The Analysis service could not be reached or understood
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          $ref: '#/components/responses/Unexpected'
+    get:
+      tags:
+      - Recommendations
+      summary: List recommendations
+      parameters:
+      - name: analysis_run_id
+        in: query
+        required: false
+        schema: &id001
+          type: string
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - delivered
+          - approved
+          - rejected
+        description: Case-insensitive
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecommendationDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          description: '`recommendation.invalid_response` (unknown status filter)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/recommendations/{recommendationId}:
+    get:
+      tags:
+      - Recommendations
+      summary: Get one recommendation
+      parameters:
+      - &id002
+        name: recommendationId
+        in: path
+        required: true
+        schema: *id001
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/recommendations/{recommendationId}/respond:
+    post:
+      tags:
+      - Recommendations
+      summary: Approve or reject a recommendation (once)
+      description: Roles `User` and `Admin` only; the internal `Service` role gets 403. The responder is the token's
+        `sub`. Approval only records the decision; no Graph update follows.
+      parameters:
+      - *id002
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RespondToRecommendationRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: '`recommendation.not_found`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: '`recommendation.invalid_response` (not approve/reject, or comment longer than 1000), `recommendation.invalid_state_transition`
+            (already answered)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /:
+    get:
+      tags:
+      - Health
+      summary: Liveness check (anonymous)
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: *id001
+                  service: *id001
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token from POST /api/v1/users/login (Identity service). HS256, claims sub, email, name,
+        role.
+  schemas:
+    GenerateRecommendationsRequest:
+      type: object
+      required:
+      - analysis_run_id
+      properties:
+        analysis_run_id: *id001
+    RespondToRecommendationRequest:
+      type: object
+      required:
+      - response
+      properties:
+        response:
+          type: string
+          enum:
+          - approve
+          - reject
+          description: Case-insensitive
+        comment:
+          type:
+          - 'null'
+          - string
+          maxLength: 1000
+    RecommendationDto:
+      type: object
+      required:
+      - id
+      - analysis_run_id
+      - graph_version_id
+      - board_id
+      - target_node_id
+      - target_node_name
+      - content
+      - status
+      - created_at
+      - delivered_at
+      properties:
+        id: *id001
+        analysis_run_id: *id001
+        graph_version_id: *id001
+        board_id: *id001
+        target_node_id: *id001
+        target_node_name: *id001
+        content: *id001
+        status:
+          type: string
+          enum:
+          - Delivered
+          - Approved
+          - Rejected
+          description: Delivered -> Approved | Rejected
+        created_at: &id003
+          type: string
+          format: date-time
+        delivered_at: *id003
+        responded_at:
+          type:
+          - 'null'
+          - string
+          format: date-time
+        user_comment:
+          type:
+          - 'null'
+          - string
+        responded_by_user_id:
+          type:
+          - 'null'
+          - string
+    ProblemDetails:
+      type: object
+      description: RFC 7807 problem details (`application/problem+json`).
+      properties:
+        type:
+          type:
+          - 'null'
+          - string
+        title:
+          type:
+          - 'null'
+          - string
+        status:
+          type:
+          - 'null'
+          - integer
+          format: int32
+        detail:
+          type:
+          - 'null'
+          - string
+        instance:
+          type:
+          - 'null'
+          - string
+        code:
+          type:
+          - 'null'
+          - string
+          description: Stable machine-readable error code of a domain rule, e.g. `user.duplicate_email`. Absent
+            for technical errors.
+  responses:
+    Unauthorized:
+      description: Missing, invalid or expired access token (no body).
+    Forbidden:
+      description: The token's role is not allowed to call this endpoint (no body).
+    Unexpected:
+      description: Unexpected error (500).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'

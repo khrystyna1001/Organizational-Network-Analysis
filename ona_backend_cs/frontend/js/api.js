@@ -40,7 +40,7 @@ export async function call(method, path, { json, form } = {}) {
   let data = null;
   try { data = await response.json(); } catch { /* empty or non-JSON body */ }
 
-  if (response.status === 401 && current?.token) {
+  if (response.status === 401 && current?.token && !data?.code) {   // a 401 with a domain `code` (e.g. wrong current password) is not an expired session
     session.write(null);
     window.dispatchEvent(new Event("ona:signout"));
     throw new ApiError("Your session expired. Please sign in again.");

@@ -1,6 +1,6 @@
 # Value Objects and strongly typed identifiers
 
-Implemented: `BoardName`, `NodeName`, `DepartmentName` (`Domain/ValueObjects`).
+Implemented in Graph: `BoardName`, `NodeName`, `DepartmentName` (`Domain/ValueObjects`); the other rows below (`ConnectionWeight`, `ImportedRowCount`) are still design. Other contexts already have their own typed ids and value objects: Identity (`UserId`, `Email`, `DisplayName`, `UserRole`, `PasswordPolicy`), Analysis (`AnalysisRunId`, `BoardId`, `GraphVersionId`, `Metrics`), Insights (`RecommendationId`, `AnalysisRunId`, `BoardId`, `GraphVersionId`, `TargetNodeId`). Graph's `BoardId`, `NodeId` and `ConnectionId` are still GUID strings.
 
 | Value Object | Component attributes and types | Hard self-validation at creation | Example immutable domain operation |
 | --- | --- | --- | --- |
