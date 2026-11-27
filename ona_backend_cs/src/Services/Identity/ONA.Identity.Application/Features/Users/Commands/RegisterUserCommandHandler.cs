@@ -1,5 +1,4 @@
 using ONA.Identity.Application.Abstractions;
-using ONA.Identity.Application.Abstractions.Messaging;
 using ONA.Identity.Application.DTOs;
 using ONA.Identity.Domain.Aggregates;
 using ONA.Identity.Domain.Exceptions;
@@ -10,9 +9,9 @@ namespace ONA.Identity.Application.Features.Users.Commands;
 public sealed class RegisterUserCommandHandler(
     IUserRepository repository,
     IPasswordHasher hasher,
-    TimeProvider clock) : ICommandHandler<RegisterUserCommand, UserDto>
+    TimeProvider clock) : IRequestHandler<RegisterUserCommand, UserDto>
 {
-    public async Task<UserDto> HandleAsync(RegisterUserCommand command, CancellationToken cancellationToken = default)
+    public async Task<UserDto> Handle(RegisterUserCommand command, CancellationToken cancellationToken = default)
     {
         var email = Email.Create(command.Email);
         var displayName = new DisplayName(command.DisplayName);

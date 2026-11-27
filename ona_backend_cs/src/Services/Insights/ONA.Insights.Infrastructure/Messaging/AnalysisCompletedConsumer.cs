@@ -80,7 +80,7 @@ internal sealed class AnalysisCompletedConsumer(
 
             await using var scope = scopes.CreateAsyncScope();
             var handler = scope.ServiceProvider.GetRequiredService<AnalysisCompletedMessageHandler>();
-            var outcome = await handler.HandleAsync(result.Message.Value, stoppingToken);
+            var outcome = await handler.Handle(result.Message.Value, stoppingToken);
 
             switch (outcome.Outcome)
             {

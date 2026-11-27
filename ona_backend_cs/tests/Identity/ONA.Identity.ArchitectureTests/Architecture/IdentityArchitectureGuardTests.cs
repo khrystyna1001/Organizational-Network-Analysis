@@ -35,7 +35,7 @@ public sealed class IdentityArchitectureGuardTests
             .ShouldNot()
             .HaveDependencyOnAny(
                 "ONA.Identity.Infrastructure", "ONA.Identity.Presentation",
-                "Microsoft.EntityFrameworkCore", "MySql", "Microsoft.AspNetCore", "MediatR")
+                "Microsoft.EntityFrameworkCore", "MySql", "Microsoft.AspNetCore")
             .GetResult();
 
         Assert.True(result.IsSuccessful, Describe("Application violates the Dependency Rule", result));

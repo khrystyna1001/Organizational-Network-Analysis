@@ -11,4 +11,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Using Include="MediatR" />
+  </ItemGroup>
 </Project>

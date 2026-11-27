@@ -16,7 +16,7 @@ public sealed class BoardCommandHandlerTests
     {
         var handler = new CreateBoardCommandHandler(_repository);
 
-        var result = await handler.HandleAsync(new CreateBoardCommand("Engineering", "ONA"));
+        var result = await handler.Handle(new CreateBoardCommand("Engineering", "ONA"), default);
 
         var stored = Assert.Single(_repository.Boards);
         Assert.Equal(stored.Id, result.Id);
@@ -30,7 +30,7 @@ public sealed class BoardCommandHandlerTests
         var handler = new CreateBoardCommandHandler(_repository);
 
         var exception = await Assert.ThrowsAsync<InvalidBoardException>(
-            () => handler.HandleAsync(new CreateBoardCommand(" ", null)));
+            () => handler.Handle(new CreateBoardCommand(" ", null), default));
 
         Assert.Equal("board.invalid_name", exception.Code);
         Assert.Empty(_repository.Boards);
@@ -42,7 +42,7 @@ public sealed class BoardCommandHandlerTests
         var board = _repository.Seed(new Board("b1", "Engineering", "ONA"));
         var handler = new RenameBoardCommandHandler(_repository);
 
-        var result = await handler.HandleAsync(new RenameBoardCommand("b1", "People", null, false));
+        var result = await handler.Handle(new RenameBoardCommand("b1", "People", null, false), default);
 
         Assert.Equal("People", board.Name);
         Assert.Equal("ONA", result.Description);
@@ -54,8 +54,8 @@ public sealed class BoardCommandHandlerTests
         var board = _repository.Seed(new Board("b1", "Engineering", null));
         board.AddNode("Alex", "Director", "Engineering");
 
-        await new BuildBoardGraphCommandHandler(_repository).HandleAsync(new BuildBoardGraphCommand("b1"));
-        var result = await new PublishBoardCommandHandler(_repository, new RecordingEventPublisher()).HandleAsync(new PublishBoardCommand("b1"));
+        await new BuildBoardGraphCommandHandler(_repository).Handle(new BuildBoardGraphCommand("b1"), default);
+        var result = await new PublishBoardCommandHandler(_repository, new RecordingEventPublisher()).Handle(new PublishBoardCommand("b1"), default);
 
         Assert.Equal(nameof(BoardLifecycle.Published), result.Lifecycle);
         Assert.NotNull(result.CurrentGraphVersionId);
@@ -68,7 +68,7 @@ public sealed class BoardCommandHandlerTests
         _repository.Seed(new Board("b1", "Engineering", null));
 
         await Assert.ThrowsAsync<InvalidGraphStateTransitionException>(
-            () => new PublishBoardCommandHandler(_repository, new RecordingEventPublisher()).HandleAsync(new PublishBoardCommand("b1")));
+            () => new PublishBoardCommandHandler(_repository, new RecordingEventPublisher()).Handle(new PublishBoardCommand("b1"), default));
 
         Assert.Equal(0, _repository.SaveCount);
     }
@@ -77,7 +77,7 @@ public sealed class BoardCommandHandlerTests
     public async Task ArchiveBoard_WhenBoardMissing_ShouldThrowBoardNotFound()
     {
         var exception = await Assert.ThrowsAsync<BoardNotFoundException>(
-            () => new ArchiveBoardCommandHandler(_repository).HandleAsync(new ArchiveBoardCommand("missing")));
+            () => new ArchiveBoardCommandHandler(_repository).Handle(new ArchiveBoardCommand("missing"), default));
 
         Assert.Equal("missing", exception.BoardId);
     }
@@ -91,7 +91,7 @@ public sealed class BoardCommandHandlerTests
         board.PublishGraphVersion();
 
         var exception = await Assert.ThrowsAsync<BoardDeletionNotAllowedException>(
-            () => new DeleteBoardCommandHandler(_repository).HandleAsync(new DeleteBoardCommand("b1")));
+            () => new DeleteBoardCommandHandler(_repository).Handle(new DeleteBoardCommand("b1"), default));
 
         Assert.Equal("board.deletion_not_allowed", exception.Code);
         Assert.Single(_repository.Boards);
@@ -102,7 +102,7 @@ public sealed class BoardCommandHandlerTests
     {
         _repository.Seed(new Board("b1", "Engineering", null));
 
-        var deleted = await new DeleteBoardCommandHandler(_repository).HandleAsync(new DeleteBoardCommand("b1"));
+        var deleted = await new DeleteBoardCommandHandler(_repository).Handle(new DeleteBoardCommand("b1"), default);
 
         Assert.True(deleted);
         Assert.Empty(_repository.Boards);
@@ -111,7 +111,7 @@ public sealed class BoardCommandHandlerTests
     [Fact]
     public async Task DeleteBoard_WhenMissing_ShouldReturnFalse()
     {
-        var deleted = await new DeleteBoardCommandHandler(_repository).HandleAsync(new DeleteBoardCommand("missing"));
+        var deleted = await new DeleteBoardCommandHandler(_repository).Handle(new DeleteBoardCommand("missing"), default);
 
         Assert.False(deleted);
     }
@@ -122,9 +122,9 @@ public sealed class BoardCommandHandlerTests
         var board = _repository.Seed(new Board("b1", "Engineering", null));
         board.AddNode("Alex", "Director", "Engineering");
 
-        var single = await new GetBoardByIdQueryHandler(_repository).HandleAsync(new GetBoardByIdQuery("b1"));
-        var all = await new GetAllBoardsQueryHandler(_repository).HandleAsync(new GetAllBoardsQuery());
-        var missing = await new GetBoardByIdQueryHandler(_repository).HandleAsync(new GetBoardByIdQuery("x"));
+        var single = await new GetBoardByIdQueryHandler(_repository).Handle(new GetBoardByIdQuery("b1"), default);
+        var all = await new GetAllBoardsQueryHandler(_repository).Handle(new GetAllBoardsQuery(), default);
+        var missing = await new GetBoardByIdQueryHandler(_repository).Handle(new GetBoardByIdQuery("x"), default);
 
         Assert.NotNull(single);
         Assert.Equal(1, single.NodeCount);
@@ -142,7 +142,7 @@ public sealed class BoardCommandHandlerTests
         ]));
         var handler = new ImportBoardFromHrisCommandHandler(port, _repository);
 
-        var result = await handler.HandleAsync(new ImportBoardFromHrisCommand("Engineering", Stream.Null));
+        var result = await handler.Handle(new ImportBoardFromHrisCommand("Engineering", Stream.Null), default);
 
         var board = Assert.Single(_repository.Boards);
         Assert.Equal(2, result.NodesCreated);
@@ -163,7 +163,7 @@ public sealed class BoardCommandHandlerTests
         var mapping = new ColumnMapping(FullName: "Name", Supervisor: "Boss");
 
         await new ImportBoardFromHrisCommandHandler(port, _repository)
-            .HandleAsync(new ImportBoardFromHrisCommand("Any CSV", Stream.Null, mapping));
+            .Handle(new ImportBoardFromHrisCommand("Any CSV", Stream.Null, mapping), default);
 
         Assert.Equal(mapping, port.ReceivedMapping);
     }
@@ -177,7 +177,7 @@ public sealed class BoardCommandHandlerTests
         ]));
 
         await new ImportBoardFromHrisCommandHandler(port, _repository)
-            .HandleAsync(new ImportBoardFromHrisCommand("HRIS", Stream.Null));
+            .Handle(new ImportBoardFromHrisCommand("HRIS", Stream.Null), default);
 
         Assert.Null(port.ReceivedMapping);   // null = the port applies ColumnMapping.Hris
     }
@@ -188,7 +188,7 @@ public sealed class BoardCommandHandlerTests
         var preview = new CsvPreview(["Name", "Boss"], [["Alex", ""]], 1, new ColumnMapping(FullName: "Name", Supervisor: "Boss"));
 
         var result = await new PreviewCsvQueryHandler(new StubEmployeeDirectory(new OrganizationSnapshot([]), preview))
-            .HandleAsync(new PreviewCsvQuery(Stream.Null));
+            .Handle(new PreviewCsvQuery(Stream.Null), default);
 
         Assert.Equal(preview, result);
         Assert.Empty(_repository.Boards);

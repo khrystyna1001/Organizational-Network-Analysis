@@ -1,4 +1,3 @@
-using ONA.Analysis.Application.Abstractions.Messaging;
 using ONA.Analysis.Application.Services;
 using ONA.Analysis.Domain.Exceptions;
 
@@ -6,7 +5,7 @@ namespace ONA.Analysis.Application.Features.AnalysisRuns.Commands;
 
 /// <summary>Triggered by the Graph event GraphVersionPublished (at-least-once delivery).</summary>
 public sealed record StartAnalysisForGraphVersionCommand(string BoardId, string GraphVersionId)
-    : ICommand<GraphVersionAnalysisOutcome>;
+    : IRequest<GraphVersionAnalysisOutcome>;
 
 /// <summary>What happened with one delivered event. <see cref="Status"/> is Analyzed, AlreadyAnalyzed or Skipped.</summary>
 public sealed record GraphVersionAnalysisOutcome(string Status, string? AnalysisRunId, string? Reason)
@@ -22,9 +21,9 @@ public sealed record GraphVersionAnalysisOutcome(string Status, string? Analysis
 /// so the consumer does not commit the message and retries later.
 /// </summary>
 public sealed class StartAnalysisForGraphVersionCommandHandler(AnalysisRunService service)
-    : ICommandHandler<StartAnalysisForGraphVersionCommand, GraphVersionAnalysisOutcome>
+    : IRequestHandler<StartAnalysisForGraphVersionCommand, GraphVersionAnalysisOutcome>
 {
-    public async Task<GraphVersionAnalysisOutcome> HandleAsync(
+    public async Task<GraphVersionAnalysisOutcome> Handle(
         StartAnalysisForGraphVersionCommand command,
         CancellationToken cancellationToken = default)
     {

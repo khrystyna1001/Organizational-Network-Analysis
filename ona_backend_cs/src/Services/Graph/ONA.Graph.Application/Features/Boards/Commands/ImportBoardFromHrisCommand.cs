@@ -1,5 +1,4 @@
 using ONA.Graph.Application.Abstractions;
-using ONA.Graph.Application.Abstractions.Messaging;
 using ONA.Graph.Application.DTOs;
 using ONA.Graph.Application.Ports;
 using ONA.Graph.Domain.Aggregates;
@@ -13,17 +12,17 @@ namespace ONA.Graph.Application.Features.Boards.Commands;
 /// our model (NodeName, DepartmentName, supervisor references).
 /// </summary>
 public sealed record ImportBoardFromHrisCommand(string BoardName, Stream EmployeeExport, ColumnMapping? Mapping = null)
-    : ICommand<ImportedBoardDto>;
+    : IRequest<ImportedBoardDto>;
 
 public sealed class ImportBoardFromHrisCommandHandler(
     IEmployeeDirectoryPort employeeDirectory,
     IBoardRepository repository)
-    : ICommandHandler<ImportBoardFromHrisCommand, ImportedBoardDto>
+    : IRequestHandler<ImportBoardFromHrisCommand, ImportedBoardDto>
 {
     /// <summary>Weight given to every supervisor -> subordinate relationship.</summary>
     private const double ReportingLineWeight = 1.0;
 
-    public async Task<ImportedBoardDto> HandleAsync(
+    public async Task<ImportedBoardDto> Handle(
         ImportBoardFromHrisCommand command,
         CancellationToken cancellationToken = default)
     {

@@ -1,16 +1,15 @@
 using ONA.Graph.Application.Abstractions;
-using ONA.Graph.Application.Abstractions.Messaging;
 using ONA.Graph.Application.DTOs;
 
 namespace ONA.Graph.Application.Features.Boards.Queries;
 
 /// <summary>READ (single): no change tracking, returns a flat DTO or null.</summary>
-public sealed record GetBoardByIdQuery(string BoardId) : IQuery<BoardDto?>;
+public sealed record GetBoardByIdQuery(string BoardId) : IRequest<BoardDto?>;
 
 public sealed class GetBoardByIdQueryHandler(IBoardRepository repository)
-    : IQueryHandler<GetBoardByIdQuery, BoardDto?>
+    : IRequestHandler<GetBoardByIdQuery, BoardDto?>
 {
-    public async Task<BoardDto?> HandleAsync(
+    public async Task<BoardDto?> Handle(
         GetBoardByIdQuery query,
         CancellationToken cancellationToken = default)
     {

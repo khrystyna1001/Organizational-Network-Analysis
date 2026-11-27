@@ -1,14 +1,13 @@
 using ONA.Identity.Application.Abstractions;
-using ONA.Identity.Application.Abstractions.Messaging;
 using ONA.Identity.Domain.Exceptions;
 using ONA.Identity.Domain.ValueObjects;
 
 namespace ONA.Identity.Application.Features.Users.Commands;
 
 public sealed class ChangePasswordCommandHandler(IUserRepository repository, IPasswordHasher hasher)
-    : ICommandHandler<ChangePasswordCommand, bool>
+    : IRequestHandler<ChangePasswordCommand, bool>
 {
-    public async Task<bool> HandleAsync(ChangePasswordCommand command, CancellationToken cancellationToken = default)
+    public async Task<bool> Handle(ChangePasswordCommand command, CancellationToken cancellationToken = default)
     {
         var user = UserId.TryParse(command.UserId, out var id)
             ? await repository.GetByIdAsync(id!, cancellationToken)

@@ -70,3 +70,54 @@ internal static class Runs
             new AnalysisRunId(id), new BoardId("b1"), new GraphVersionId("v1"), AnalysisRunStatus.Completed, nodes);
     }
 }
+
+/// <summary>Records MediatR notifications instead of dispatching them (no SignalR in Application tests).</summary>
+internal sealed class RecordingPublisher : IPublisher
+{
+    public List<object> Published { get; } = [];
+    public bool ThrowOnPublish { get; set; }
+
+    public Task Publish(object notification, CancellationToken cancellationToken = default) => Record(notification);
+
+    public Task Publish<TNotification>(TNotification notification, CancellationToken cancellationToken = default)
+        where TNotification : INotification => Record(notification);
+
+    private Task Record(object notification)
+    {
+        if (ThrowOnPublish)
+        {
+            throw new InvalidOperationException("signalr down");
+        }
+
+        Published.Add(notification);
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Minimal mediator for the message handler tests: routes the one request type it knows to a real handler,
+/// so the tests still prove the handler talks to <see cref="ISender"/> and not to a handler directly.
+/// </summary>
+internal sealed class SingleHandlerSender(
+    IRequestHandler<ONA.Insights.Application.Features.Recommendations.Commands.GenerateRecommendationsCommand,
+        IReadOnlyList<ONA.Insights.Application.DTOs.RecommendationDto>> handler) : ISender
+{
+    public Task<TResponse> Send<TResponse>(IRequest<TResponse> request, CancellationToken cancellationToken = default)
+    {
+        var command = Assert.IsType<ONA.Insights.Application.Features.Recommendations.Commands.GenerateRecommendationsCommand>(request);
+        return (Task<TResponse>)(object)handler.Handle(command, cancellationToken);
+    }
+
+    public Task Send<TRequest>(TRequest request, CancellationToken cancellationToken = default)
+        where TRequest : IRequest => throw new NotSupportedException();
+
+    public Task<object?> Send(object request, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public IAsyncEnumerable<TResponse> CreateStream<TResponse>(
+        IStreamRequest<TResponse> request, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public IAsyncEnumerable<object?> CreateStream(object request, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+}

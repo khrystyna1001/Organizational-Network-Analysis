@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using ONA.Graph.Application.Abstractions.Messaging;
 using ONA.Graph.Application.DTOs;
 using ONA.Graph.Application.Features.Boards.Commands;
 using ONA.Graph.Application.Features.Boards.Queries;
@@ -30,7 +29,7 @@ public sealed class OrganizationImportController : ControllerBase
         [FromForm] IFormFile? file,
         [FromForm(Name = "board_name")] string? boardName,
         [FromForm(Name = "mapping")] string? mapping,
-        [FromServices] ICommandHandler<ImportBoardFromHrisCommand, ImportedBoardDto> handler,
+        [FromServices] ISender sender,
         CancellationToken cancellationToken)
     {
         if (file is null)
@@ -49,7 +48,7 @@ public sealed class OrganizationImportController : ControllerBase
         }
 
         await using var stream = file.OpenReadStream();
-        var imported = await handler.HandleAsync(
+        var imported = await sender.Send(
             new ImportBoardFromHrisCommand(ResolveBoardName(boardName, file.FileName), stream, columnMapping),
             cancellationToken);
 
@@ -68,7 +67,7 @@ public sealed class OrganizationImportController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<CsvPreview>> PreviewCsv(
         [FromForm] IFormFile? file,
-        [FromServices] IQueryHandler<PreviewCsvQuery, CsvPreview> handler,
+        [FromServices] ISender sender,
         CancellationToken cancellationToken)
     {
         if (file is null)
@@ -77,7 +76,7 @@ public sealed class OrganizationImportController : ControllerBase
         }
 
         await using var stream = file.OpenReadStream();
-        return Ok(await handler.HandleAsync(new PreviewCsvQuery(stream), cancellationToken));
+        return Ok(await sender.Send(new PreviewCsvQuery(stream), cancellationToken));
     }
 
     private static readonly JsonSerializerOptions MappingJson = new(JsonSerializerDefaults.Web)

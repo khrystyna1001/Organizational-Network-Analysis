@@ -1,5 +1,4 @@
 using ONA.Graph.Application.Abstractions;
-using ONA.Graph.Application.Abstractions.Messaging;
 
 namespace ONA.Graph.Application.Features.Boards.Commands;
 
@@ -7,12 +6,12 @@ namespace ONA.Graph.Application.Features.Boards.Commands;
 /// DELETE with guard: a Published board cannot be deleted (archive it first).
 /// Returns false when the board does not exist.
 /// </summary>
-public sealed record DeleteBoardCommand(string BoardId) : ICommand<bool>;
+public sealed record DeleteBoardCommand(string BoardId) : IRequest<bool>;
 
 public sealed class DeleteBoardCommandHandler(IBoardRepository repository)
-    : ICommandHandler<DeleteBoardCommand, bool>
+    : IRequestHandler<DeleteBoardCommand, bool>
 {
-    public async Task<bool> HandleAsync(
+    public async Task<bool> Handle(
         DeleteBoardCommand command,
         CancellationToken cancellationToken = default)
     {

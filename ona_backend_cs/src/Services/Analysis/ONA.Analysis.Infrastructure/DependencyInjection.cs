@@ -4,13 +4,13 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ONA.Analysis.Application.Abstractions;
-using ONA.Analysis.Application.Abstractions.Messaging;
 using ONA.Analysis.Application.DTOs;
 using ONA.Analysis.Application.Features.AnalysisRuns.Commands;
 using ONA.Analysis.Application.Features.AnalysisRuns.Queries;
 using ONA.Analysis.Application.Ports;
 using ONA.Analysis.Application.Services;
 using ONA.Analysis.Infrastructure.Acl;
+using ONA.Analysis.Infrastructure.Behaviors;
 using ONA.Analysis.Infrastructure.Messaging;
 using ONA.Analysis.Infrastructure.Persistence;
 using ONA.Analysis.Infrastructure.Persistence.Repositories;
@@ -68,14 +68,20 @@ public static class DependencyInjection
             provider.GetRequiredService<ILogger<GraphVersionPublishedConsumer>>()));
     }
 
-    /// <summary>Registers CQRS handlers explicitly (no mediator library).</summary>
+    /// <summary>
+    /// Registers application services, discovers CQRS handlers and notification handlers of the Application
+    /// assembly via MediatR and adds the logging pipeline behavior. The Presentation assembly registers
+    /// its own notification handlers (SignalR push) with a second <c>AddMediatR</c> call.
+    /// </summary>
     public static IServiceCollection AddAnalysisApplication(this IServiceCollection services)
     {
+        services.AddLogging();
         services.AddScoped<AnalysisRunService>();
-        services.AddScoped<ICommandHandler<StartAnalysisRunCommand, AnalysisRunDto>, StartAnalysisRunCommandHandler>();
-        services.AddScoped<ICommandHandler<StartAnalysisForGraphVersionCommand, GraphVersionAnalysisOutcome>, StartAnalysisForGraphVersionCommandHandler>();
-        services.AddScoped<IQueryHandler<GetAnalysisRunByIdQuery, AnalysisRunDto?>, GetAnalysisRunByIdQueryHandler>();
-        services.AddScoped<IQueryHandler<GetAnalysisRunsQuery, IReadOnlyList<AnalysisRunDto>>, GetAnalysisRunsQueryHandler>();
+        services.AddMediatR(cfg =>
+        {
+            cfg.RegisterServicesFromAssemblyContaining<IAnalysisRunRepository>();
+            cfg.AddOpenBehavior(typeof(RequestLoggingBehavior<,>));
+        });
         return services;
     }
 

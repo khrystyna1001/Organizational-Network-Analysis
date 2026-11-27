@@ -24,7 +24,7 @@ public sealed class PublishEventTests
         var publisher = new RecordingEventPublisher();
 
         var result = await new PublishBoardCommandHandler(_repository, publisher)
-            .HandleAsync(new PublishBoardCommand("b1"));
+            .Handle(new PublishBoardCommand("b1"), default);
 
         var published = Assert.Single(publisher.Events);
         Assert.Equal("b1", published.BoardId);
@@ -41,7 +41,7 @@ public sealed class PublishEventTests
         var publisher = new RecordingEventPublisher { ThrowOnPublish = true };
 
         var result = await new PublishBoardCommandHandler(_repository, publisher)
-            .HandleAsync(new PublishBoardCommand("b1"));
+            .Handle(new PublishBoardCommand("b1"), default);
 
         Assert.Equal(nameof(BoardLifecycle.Published), result.Lifecycle);
         Assert.Equal(BoardLifecycle.Published, board.Lifecycle);
@@ -56,7 +56,7 @@ public sealed class PublishEventTests
 
         var exception = await Assert.ThrowsAsync<InvalidGraphStateTransitionException>(
             () => new PublishBoardCommandHandler(_repository, publisher)
-                .HandleAsync(new PublishBoardCommand("b1")));
+                .Handle(new PublishBoardCommand("b1"), default));
 
         Assert.Equal("board.invalid_state_transition", exception.Code);
         Assert.Empty(publisher.Events);

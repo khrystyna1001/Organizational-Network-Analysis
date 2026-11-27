@@ -6,7 +6,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
-using ONA.Analysis.Application.Abstractions.Messaging;
 using ONA.Analysis.Application.Features.AnalysisRuns.Commands;
 using ONA.Analysis.Infrastructure.Acl;
 using ONA.Analysis.Infrastructure.Acl.Events;
@@ -103,27 +102,41 @@ public sealed class AuthAndMessagingTests
     public void Translator_RejectsInvalidEvent(string? json) =>
         Assert.False(GraphEventTranslator.TryParseGraphVersionPublished(json, out _));
 
-    private sealed class FakeTriggerHandler(Func<StartAnalysisForGraphVersionCommand, GraphVersionAnalysisOutcome> respond)
-        : ICommandHandler<StartAnalysisForGraphVersionCommand, GraphVersionAnalysisOutcome>
+    /// <summary>Stands in for the mediator: the processor must go through <see cref="ISender"/>, not a handler.</summary>
+    private sealed class FakeSender(Func<StartAnalysisForGraphVersionCommand, GraphVersionAnalysisOutcome> respond) : ISender
     {
         public List<StartAnalysisForGraphVersionCommand> Calls { get; } = [];
 
-        public Task<GraphVersionAnalysisOutcome> HandleAsync(StartAnalysisForGraphVersionCommand command, CancellationToken ct = default)
+        public Task<TResponse> Send<TResponse>(IRequest<TResponse> request, CancellationToken cancellationToken = default)
         {
+            var command = Assert.IsType<StartAnalysisForGraphVersionCommand>(request);
             Calls.Add(command);
-            return Task.FromResult(respond(command));
+            return Task.FromResult((TResponse)(object)respond(command));
         }
+
+        public Task Send<TRequest>(TRequest request, CancellationToken cancellationToken = default)
+            where TRequest : IRequest => throw new NotSupportedException();
+
+        public Task<object?> Send(object request, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public IAsyncEnumerable<TResponse> CreateStream<TResponse>(
+            IStreamRequest<TResponse> request, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public IAsyncEnumerable<object?> CreateStream(object request, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
-    private static (GraphVersionPublishedProcessor Processor, FakeTriggerHandler Handler) CreateProcessor(
+    private static (GraphVersionPublishedProcessor Processor, FakeSender Handler) CreateProcessor(
         Func<StartAnalysisForGraphVersionCommand, GraphVersionAnalysisOutcome> respond)
     {
-        var handler = new FakeTriggerHandler(respond);
+        var sender = new FakeSender(respond);
         var services = new ServiceCollection();
-        services.AddSingleton<ICommandHandler<StartAnalysisForGraphVersionCommand, GraphVersionAnalysisOutcome>>(handler);
+        services.AddSingleton<ISender>(sender);
         var provider = services.BuildServiceProvider();
         return (new GraphVersionPublishedProcessor(
-            provider.GetRequiredService<IServiceScopeFactory>(), NullLogger<GraphVersionPublishedProcessor>.Instance), handler);
+            provider.GetRequiredService<IServiceScopeFactory>(), NullLogger<GraphVersionPublishedProcessor>.Instance), sender);
     }
 
     private const string ValidEvent = """{"event_id":"e","board_id":"b1","graph_version_id":"v1"}""";

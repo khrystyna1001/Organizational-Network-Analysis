@@ -1,5 +1,4 @@
 using ONA.Identity.Application.Abstractions;
-using ONA.Identity.Application.Abstractions.Messaging;
 using ONA.Identity.Domain.Exceptions;
 using ONA.Identity.Domain.ValueObjects;
 
@@ -9,9 +8,9 @@ public sealed class ConfirmPasswordResetCommandHandler(
     IUserRepository repository,
     IPasswordHasher hasher,
     IResetTokenGenerator tokens,
-    TimeProvider clock) : ICommandHandler<ConfirmPasswordResetCommand, bool>
+    TimeProvider clock) : IRequestHandler<ConfirmPasswordResetCommand, bool>
 {
-    public async Task<bool> HandleAsync(ConfirmPasswordResetCommand command, CancellationToken cancellationToken = default)
+    public async Task<bool> Handle(ConfirmPasswordResetCommand command, CancellationToken cancellationToken = default)
     {
         PasswordPolicy.EnsureStrong(command.NewPassword);
 

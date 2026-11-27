@@ -15,4 +15,7 @@
     <InternalsVisibleTo Include="ONA.Insights.Infrastructure" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Using Include="MediatR" />
+  </ItemGroup>
 </Project>

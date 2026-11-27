@@ -42,7 +42,7 @@ flowchart LR
     Identity -- "OHS: UserId claim" --> Graph
 ```
 
-Arrows point from Upstream [U] to Downstream [D]. Implemented: HRIS → Graph (ACL); Graph → Analysis (event `GraphVersionPublished` + `GET /boards/{id}/snapshot`); Analysis → Insights (event `AnalysisCompleted` + `GET /analysis-runs/{id}`); Identity → all (JWT, see ADR-007). `ApplyGraphUpdate`, the LLM provider and the OIDC provider are not implemented (rule-based generator and local login instead).
+Arrows point from Upstream [U] to Downstream [D]. Implemented: HRIS → Graph (ACL); Graph → Analysis (event `GraphVersionPublished` + `GET /boards/{id}/snapshot`); Analysis → Insights (event `AnalysisCompleted` + `GET /analysis-runs/{id}`); Identity → all (JWT, see ADR-007). Analysis and Insights also push UI-only notifications (`AnalysisRunCompleted`, `RecommendationsGenerated`, `RecommendationResponded`) to browsers over SignalR (ADR-008); they are not integration events between contexts. `ApplyGraphUpdate`, the LLM provider and the OIDC provider are not implemented (rule-based generator and local login instead).
 
 | Relationship | Pattern | Who dictates the model | Why | Main risk |
 | --- | --- | --- | --- | --- |

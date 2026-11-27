@@ -1,5 +1,4 @@
 using ONA.Identity.Application.Abstractions;
-using ONA.Identity.Application.Abstractions.Messaging;
 using ONA.Identity.Application.DTOs;
 using ONA.Identity.Domain.Exceptions;
 using ONA.Identity.Domain.ValueObjects;
@@ -7,9 +6,9 @@ using ONA.Identity.Domain.ValueObjects;
 namespace ONA.Identity.Application.Features.Users.Commands;
 
 public sealed class UpdateUserCommandHandler(IUserRepository repository)
-    : ICommandHandler<UpdateUserCommand, UserDto>
+    : IRequestHandler<UpdateUserCommand, UserDto>
 {
-    public async Task<UserDto> HandleAsync(UpdateUserCommand command, CancellationToken cancellationToken = default)
+    public async Task<UserDto> Handle(UpdateUserCommand command, CancellationToken cancellationToken = default)
     {
         var displayName = new DisplayName(command.DisplayName);
         var user = UserId.TryParse(command.UserId, out var id)

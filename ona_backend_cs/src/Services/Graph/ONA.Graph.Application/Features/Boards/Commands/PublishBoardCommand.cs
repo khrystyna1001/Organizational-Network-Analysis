@@ -1,5 +1,4 @@
 using ONA.Graph.Application.Abstractions;
-using ONA.Graph.Application.Abstractions.Messaging;
 using ONA.Graph.Application.DTOs;
 using ONA.Graph.Application.Events;
 using ONA.Graph.Application.Ports;
@@ -12,14 +11,14 @@ namespace ONA.Graph.Application.Features.Boards.Commands;
 /// Built -> Published. Saves a new GraphVersionId; the published graph becomes immutable.
 /// Forbidden transitions throw InvalidGraphStateTransitionException and nothing is saved.
 /// </summary>
-public sealed record PublishBoardCommand(string BoardId) : ICommand<BoardDto>;
+public sealed record PublishBoardCommand(string BoardId) : IRequest<BoardDto>;
 
 public sealed class PublishBoardCommandHandler(
     IBoardRepository repository,
     IGraphEventPublisher eventPublisher)
-    : ICommandHandler<PublishBoardCommand, BoardDto>
+    : IRequestHandler<PublishBoardCommand, BoardDto>
 {
-    public async Task<BoardDto> HandleAsync(
+    public async Task<BoardDto> Handle(
         PublishBoardCommand command,
         CancellationToken cancellationToken = default)
     {

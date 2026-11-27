@@ -1,5 +1,4 @@
 using Microsoft.Extensions.DependencyInjection;
-using ONA.Graph.Application.Abstractions.Messaging;
 using ONA.Graph.Application.DTOs;
 using ONA.Graph.Application.Features.Boards.Commands;
 using ONA.Graph.Application.Features.Boards.Queries;
@@ -24,8 +23,8 @@ public sealed class GraphPersistenceTests(MySqlDatabaseFixture fixture)
         {
             var graph = scope.ServiceProvider.GetRequiredService<IGraphService>();
             var board = await scope.ServiceProvider
-                .GetRequiredService<ICommandHandler<CreateBoardCommand, BoardDto>>()
-                .HandleAsync(new CreateBoardCommand("Engineering", "Graph persistence test"));
+                .GetRequiredService<IRequestHandler<CreateBoardCommand, BoardDto>>()
+                .Handle(new CreateBoardCommand("Engineering", "Graph persistence test"), default);
             boardId = board.Id;
 
             var first = await graph.AddNodeAsync(
@@ -45,8 +44,8 @@ public sealed class GraphPersistenceTests(MySqlDatabaseFixture fixture)
         {
             var graph = scope.ServiceProvider.GetRequiredService<IGraphService>();
             var board = await scope.ServiceProvider
-                .GetRequiredService<IQueryHandler<GetBoardByIdQuery, BoardDto?>>()
-                .HandleAsync(new GetBoardByIdQuery(boardId));
+                .GetRequiredService<IRequestHandler<GetBoardByIdQuery, BoardDto?>>()
+                .Handle(new GetBoardByIdQuery(boardId), default);
             var nodes = await graph.GetNodesAsync(boardId);
             var connections = await graph.GetConnectionsAsync(boardId);
 
@@ -75,8 +74,8 @@ public sealed class GraphPersistenceTests(MySqlDatabaseFixture fixture)
         {
             var graph = scope.ServiceProvider.GetRequiredService<IGraphService>();
             var board = await scope.ServiceProvider
-                .GetRequiredService<ICommandHandler<CreateBoardCommand, BoardDto>>()
-                .HandleAsync(new CreateBoardCommand("Engineering", null));
+                .GetRequiredService<IRequestHandler<CreateBoardCommand, BoardDto>>()
+                .Handle(new CreateBoardCommand("Engineering", null), default);
             boardId = board.Id;
             var first = await graph.AddNodeAsync(
                 boardId,
@@ -114,8 +113,8 @@ public sealed class GraphPersistenceTests(MySqlDatabaseFixture fixture)
         await using (var scope = services.CreateAsyncScope())
         {
             var board = await scope.ServiceProvider
-                .GetRequiredService<ICommandHandler<CreateBoardCommand, BoardDto>>()
-                .HandleAsync(new CreateBoardCommand("Lifecycle", null));
+                .GetRequiredService<IRequestHandler<CreateBoardCommand, BoardDto>>()
+                .Handle(new CreateBoardCommand("Lifecycle", null), default);
             boardId = board.Id;
             await scope.ServiceProvider.GetRequiredService<IGraphService>()
                 .AddNodeAsync(boardId, new CreateNodeDto(boardId, "Alex", "Director", "Engineering"));
@@ -124,47 +123,47 @@ public sealed class GraphPersistenceTests(MySqlDatabaseFixture fixture)
         await using (var scope = services.CreateAsyncScope())
         {
             await scope.ServiceProvider
-                .GetRequiredService<ICommandHandler<BuildBoardGraphCommand, BoardDto>>()
-                .HandleAsync(new BuildBoardGraphCommand(boardId));
+                .GetRequiredService<IRequestHandler<BuildBoardGraphCommand, BoardDto>>()
+                .Handle(new BuildBoardGraphCommand(boardId), default);
         }
 
         await using (var scope = services.CreateAsyncScope())
         {
             await scope.ServiceProvider
-                .GetRequiredService<ICommandHandler<PublishBoardCommand, BoardDto>>()
-                .HandleAsync(new PublishBoardCommand(boardId));
+                .GetRequiredService<IRequestHandler<PublishBoardCommand, BoardDto>>()
+                .Handle(new PublishBoardCommand(boardId), default);
         }
 
         await using (var scope = services.CreateAsyncScope())
         {
             var reloaded = await scope.ServiceProvider
-                .GetRequiredService<IQueryHandler<GetBoardByIdQuery, BoardDto?>>()
-                .HandleAsync(new GetBoardByIdQuery(boardId));
+                .GetRequiredService<IRequestHandler<GetBoardByIdQuery, BoardDto?>>()
+                .Handle(new GetBoardByIdQuery(boardId), default);
             Assert.NotNull(reloaded);
             Assert.Equal("Published", reloaded.Lifecycle);
             Assert.NotNull(reloaded.CurrentGraphVersionId);
 
             await Assert.ThrowsAsync<ONA.Graph.Domain.Exceptions.BoardDeletionNotAllowedException>(
                 () => scope.ServiceProvider
-                    .GetRequiredService<ICommandHandler<DeleteBoardCommand, bool>>()
-                    .HandleAsync(new DeleteBoardCommand(boardId)));
+                    .GetRequiredService<IRequestHandler<DeleteBoardCommand, bool>>()
+                    .Handle(new DeleteBoardCommand(boardId), default));
         }
 
         await using (var scope = services.CreateAsyncScope())
         {
             await scope.ServiceProvider
-                .GetRequiredService<ICommandHandler<ArchiveBoardCommand, BoardDto>>()
-                .HandleAsync(new ArchiveBoardCommand(boardId));
+                .GetRequiredService<IRequestHandler<ArchiveBoardCommand, BoardDto>>()
+                .Handle(new ArchiveBoardCommand(boardId), default);
             Assert.True(await scope.ServiceProvider
-                .GetRequiredService<ICommandHandler<DeleteBoardCommand, bool>>()
-                .HandleAsync(new DeleteBoardCommand(boardId)));
+                .GetRequiredService<IRequestHandler<DeleteBoardCommand, bool>>()
+                .Handle(new DeleteBoardCommand(boardId), default));
         }
 
         await using (var scope = services.CreateAsyncScope())
         {
             Assert.Null(await scope.ServiceProvider
-                .GetRequiredService<IQueryHandler<GetBoardByIdQuery, BoardDto?>>()
-                .HandleAsync(new GetBoardByIdQuery(boardId)));
+                .GetRequiredService<IRequestHandler<GetBoardByIdQuery, BoardDto?>>()
+                .Handle(new GetBoardByIdQuery(boardId), default));
         }
     }
 

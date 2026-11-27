@@ -1,13 +1,13 @@
 /* ONA – "Executive Network Intelligence" theme */
 :root {
-  --bg: #0C1017; --side: #181C23; --card: #161D2A; --card2: #1E2738; --inset: #0F1520; --canvas: #0A0E15;
-  --line: #232D3F; --line2: #334155; --txt: #DFE2ED; --mut: #94A3B8;
-  --cy: #00D2FF; --cy-soft: #A5E7FF; --ind: #6366F1; --ind-soft: #C0C1FF; --em: #10B981; --em-soft: #69F6B9; --rose: #F43F5E; --rose-soft: #FFB4AB;
+  --bg: #0F141B; --side: #131923; --card: #171E2A; --card2: #202939; --inset: #121924; --canvas: #0D121B;
+  --line: #263042; --line2: #374459; --txt: #E7EAF1; --mut: #9CA9BC;
+  --cy: #3CC8F5; --cy-soft: #A5E7FF; --ind: #6366F1; --ind-soft: #C0C1FF; --em: #10B981; --em-soft: #69F6B9; --rose: #F43F5E; --rose-soft: #FFB4AB;
   --mono: 'JetBrains Mono', ui-monospace, monospace; --sans: 'Inter', system-ui, sans-serif;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html, body { margin: 0; background: var(--bg); color: var(--txt); font: 14px/22px var(--sans); }
+html, body { margin: 0; background: var(--bg); color: var(--txt); font: 15px/24px var(--sans); }
 h1, h2, h3 { margin: 0; letter-spacing: -.015em; font-weight: 600; }
 h1 { font-size: 28px; line-height: 36px; margin: 6px 0 2px; }
 a { color: var(--cy); }
@@ -333,3 +333,81 @@ th.num + th, th[onclick]:hover { color: var(--cy-soft); }
 tbody tr:hover { background: rgba(0,210,255,.05); }
 @media (max-width: 700px) { .stepper li:not(:last-child)::after { width: 12px; } .stepper li + li { margin-left: 6px; } }
 .stepper { margin: 14px 0 6px; }
+
+/* ======================================================================
+   Comfort layer: calmer, easier to read, clear feedback while things happen.
+   (Overrides the rules above on purpose; keep new tweaks here.)
+   ====================================================================== */
+
+/* -- Readable labels: sentence case sans instead of tiny uppercase monospace */
+.kicker, .chip, .count, .sec, .kpi .label, .micro .l, th, .stepper, .brand span, .seg button {
+  font-family: var(--sans); text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 12.5px;
+}
+.sec { color: var(--mut); font-weight: 600; margin: 22px 0 8px; }
+.kpi .label, .micro .l, th { color: var(--mut); }
+.stepper { font-size: 13px; }
+.brand span { font-size: 12.5px; color: var(--mut); }
+.chip, .kicker, .count { padding: 2px 10px; }
+.td-mono, td.num, .pbar span, .mono { font-family: var(--mono); }
+.hint, .muted.small, .small { font-size: 13px; line-height: 20px; }
+
+/* -- Calm surfaces: flat background, no neon glow, no gradient text */
+body { background: var(--bg); }
+.auth { background: none; }
+.top h1 { background: none; color: var(--txt); -webkit-background-clip: border-box; background-clip: border-box; font-size: 30px; }
+.sidebar { background: var(--side); }
+.btn.primary, .btn.primary:hover:not(:disabled) { background: var(--cy); box-shadow: none; }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.07); }
+.brand::before { box-shadow: none; }
+.card, .kpi, .usercard { box-shadow: none; }
+.kpi:hover { transform: none; }
+.kpi:nth-child(4):not(:has(.val:empty)) { background-image: none; }
+#toast { border-radius: 10px; }
+
+/* -- Breathing room */
+:root { --r: 12px; --r-sm: 9px; }
+.main { max-width: 1480px; margin: 0 auto; padding: 28px 36px 64px; }
+.main > * + *, #board-view > * + * { margin-top: 24px; }
+.kpis, .split, .side { gap: 20px; }
+.recs { gap: 20px; }
+.card { padding: 22px; }
+.kpi { padding: 18px 20px; min-height: 120px; }
+.btn { padding: 9px 16px; }
+input, select { padding: 10px 12px; }
+td { padding: 11px 14px; } th { padding: 12px 14px; }
+.row { padding: 10px 12px; }
+.top { align-items: flex-start; }
+.top-right { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
+.stepper { margin: 16px 0 4px; }
+.note { margin-top: 4px; min-height: 22px; display: flex; align-items: center; gap: 10px; }
+
+/* -- The graph uses the screen it has instead of a fixed box */
+.graph { height: clamp(440px, 66vh, 720px); }
+
+/* -- Live connection status */
+.live { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--mut); padding: 4px 12px 4px 10px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--card); cursor: default; }
+.live i { width: 8px; height: 8px; border-radius: 50%; background: var(--mut); flex: none; }
+.live[data-state="live"] { color: var(--txt); }
+.live[data-state="live"] i { background: var(--em); animation: pulse 2.6s ease-out infinite; }
+.live[data-state="connecting"] i { background: #F59E0B; }
+.live[data-state="offline"] i { background: var(--rose); }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(16,185,129,.5); } 70%, 100% { box-shadow: 0 0 0 7px rgba(16,185,129,0); } }
+
+/* -- Feedback while something runs */
+.spin { width: 14px; height: 14px; flex: none; border-radius: 50%; border: 2px solid var(--line2); border-top-color: var(--cy);
+  animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.btn.busy { cursor: progress; opacity: .75; }
+.btn.busy::before { content: ""; display: inline-block; width: 11px; height: 11px; margin-right: 8px; vertical-align: -1px; border-radius: 50%;
+  border: 2px solid currentColor; border-right-color: transparent; animation: spin .8s linear infinite; }
+
+/* -- New data arriving by push gets a short, gentle highlight */
+.fresh > * { animation: fresh 1.4s ease-out; }
+@keyframes fresh { from { box-shadow: 0 0 0 2px rgba(60,200,245,.5); } to { box-shadow: 0 0 0 2px rgba(60,200,245,0); } }
+.fresh.recs > * { animation-name: fresh, rise; animation-duration: 1.4s, .3s; }
+
+@media (max-width: 860px) { .main { padding: 18px 16px 48px; } .top-right { align-items: flex-start; } }
+@media (prefers-reduced-motion: reduce) { .live i, .spin, .btn.busy::before { animation: none !important; } }
+.note:empty { display: none; }
+#kpis { margin-top: 16px; }

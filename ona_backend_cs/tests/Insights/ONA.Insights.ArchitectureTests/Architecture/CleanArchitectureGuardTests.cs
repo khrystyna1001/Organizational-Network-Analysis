@@ -30,7 +30,7 @@ public sealed class CleanArchitectureGuardTests
     {
         var result = Types.InAssembly(ApplicationAssembly).ShouldNot().HaveDependencyOnAny(
             "ONA.Insights.Infrastructure", "ONA.Insights.Presentation",
-            "Microsoft.EntityFrameworkCore", "MySql", "Microsoft.AspNetCore", "MediatR").GetResult();
+            "Microsoft.EntityFrameworkCore", "MySql", "Microsoft.AspNetCore").GetResult();
 
         Assert.True(result.IsSuccessful, Describe("Application violates the Dependency Rule", result));
     }

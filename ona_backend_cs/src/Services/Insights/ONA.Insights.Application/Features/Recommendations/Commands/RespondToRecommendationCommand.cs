@@ -1,6 +1,6 @@
 using ONA.Insights.Application.Abstractions;
-using ONA.Insights.Application.Abstractions.Messaging;
 using ONA.Insights.Application.DTOs;
+using ONA.Insights.Application.Notifications;
 using ONA.Insights.Domain.Exceptions;
 using ONA.Insights.Domain.ValueObjects;
 
@@ -9,19 +9,21 @@ namespace ONA.Insights.Application.Features.Recommendations.Commands;
 /// <summary>
 /// RespondToLLM: the user approves or rejects once. Approval only records the decision;
 /// requesting a Graph update (ApplyGraphUpdate) is a documented target, not implemented.
+/// Publishes <see cref="RecommendationRespondedNotification"/> after the decision is saved.
 /// </summary>
 public sealed record RespondToRecommendationCommand(
     string RecommendationId,
     string? Response,
     string? Comment,
-    string? UserId) : ICommand<RecommendationDto>;
+    string? UserId) : IRequest<RecommendationDto>;
 
 public sealed class RespondToRecommendationCommandHandler(
     IRecommendationRepository repository,
-    TimeProvider clock)
-    : ICommandHandler<RespondToRecommendationCommand, RecommendationDto>
+    TimeProvider clock,
+    IPublisher notifications)
+    : IRequestHandler<RespondToRecommendationCommand, RecommendationDto>
 {
-    public async Task<RecommendationDto> HandleAsync(
+    public async Task<RecommendationDto> Handle(
         RespondToRecommendationCommand command,
         CancellationToken cancellationToken = default)
     {
@@ -43,6 +45,24 @@ public sealed class RespondToRecommendationCommandHandler(
         }
 
         await repository.SaveAsync(recommendation, cancellationToken);
-        return RecommendationDto.FromDomain(recommendation);
+
+        var dto = RecommendationDto.FromDomain(recommendation);
+        await NotifyAsync(dto, cancellationToken);
+        return dto;
+    }
+
+    /// <summary>Best-effort UI push: the decision is saved, a failing handler must not undo that.</summary>
+    private async Task NotifyAsync(RecommendationDto dto, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await notifications.Publish(
+                new RecommendationRespondedNotification(dto.Id, dto.AnalysisRunId, dto.BoardId, dto.Status),
+                cancellationToken);
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Live updates are optional.
+        }
     }
 }

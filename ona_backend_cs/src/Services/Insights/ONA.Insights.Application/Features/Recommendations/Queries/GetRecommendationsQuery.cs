@@ -1,5 +1,4 @@
 using ONA.Insights.Application.Abstractions;
-using ONA.Insights.Application.Abstractions.Messaging;
 using ONA.Insights.Application.DTOs;
 using ONA.Insights.Domain.Aggregates;
 using ONA.Insights.Domain.Exceptions;
@@ -9,12 +8,12 @@ namespace ONA.Insights.Application.Features.Recommendations.Queries;
 
 /// <summary>READ (list): optional filters by analysis run and status (Delivered, Approved, Rejected).</summary>
 public sealed record GetRecommendationsQuery(string? AnalysisRunId, string? Status)
-    : IQuery<IReadOnlyList<RecommendationDto>>;
+    : IRequest<IReadOnlyList<RecommendationDto>>;
 
 public sealed class GetRecommendationsQueryHandler(IRecommendationRepository repository)
-    : IQueryHandler<GetRecommendationsQuery, IReadOnlyList<RecommendationDto>>
+    : IRequestHandler<GetRecommendationsQuery, IReadOnlyList<RecommendationDto>>
 {
-    public async Task<IReadOnlyList<RecommendationDto>> HandleAsync(
+    public async Task<IReadOnlyList<RecommendationDto>> Handle(
         GetRecommendationsQuery query,
         CancellationToken cancellationToken = default)
     {

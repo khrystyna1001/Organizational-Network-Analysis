@@ -14,4 +14,7 @@
     <ProjectReference Include="..\ONA.Identity.Application\ONA.Identity.Application.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Using Include="MediatR" />
+  </ItemGroup>
 </Project>

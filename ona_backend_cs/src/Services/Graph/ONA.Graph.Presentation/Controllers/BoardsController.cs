@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using ONA.Graph.Application.Abstractions.Messaging;
 using ONA.Graph.Application.DTOs;
 using ONA.Graph.Application.Features.Boards.Commands;
 using ONA.Graph.Application.Features.Boards.Queries;
@@ -23,10 +22,10 @@ public sealed class BoardsController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<BoardDto>> CreateBoard(
         CreateBoardRequest request,
-        [FromServices] ICommandHandler<CreateBoardCommand, BoardDto> handler,
+        [FromServices] ISender sender,
         CancellationToken cancellationToken)
     {
-        var board = await handler.HandleAsync(
+        var board = await sender.Send(
             new CreateBoardCommand(request.Name, request.Description),
             cancellationToken);
         return CreatedAtAction(nameof(GetBoard), new { boardId = board.Id }, board);
@@ -36,9 +35,9 @@ public sealed class BoardsController : ControllerBase
     [HttpGet]
     [ProducesResponseType<IReadOnlyList<BoardDto>>(StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<BoardDto>>> GetBoards(
-        [FromServices] IQueryHandler<GetAllBoardsQuery, IReadOnlyList<BoardDto>> handler,
+        [FromServices] ISender sender,
         CancellationToken cancellationToken) =>
-        Ok(await handler.HandleAsync(new GetAllBoardsQuery(), cancellationToken));
+        Ok(await sender.Send(new GetAllBoardsQuery(), cancellationToken));
 
     // READ (single)
     [HttpGet("{boardId}", Name = nameof(GetBoard))]
@@ -46,10 +45,10 @@ public sealed class BoardsController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<BoardDto>> GetBoard(
         string boardId,
-        [FromServices] IQueryHandler<GetBoardByIdQuery, BoardDto?> handler,
+        [FromServices] ISender sender,
         CancellationToken cancellationToken)
     {
-        var board = await handler.HandleAsync(new GetBoardByIdQuery(boardId), cancellationToken);
+        var board = await sender.Send(new GetBoardByIdQuery(boardId), cancellationToken);
         return board is null
             ? Problem(statusCode: StatusCodes.Status404NotFound, title: "Board not found")
             : Ok(board);
@@ -62,9 +61,9 @@ public sealed class BoardsController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<GraphSnapshotDto>> GetSnapshot(
         string boardId,
-        [FromServices] IQueryHandler<GetGraphSnapshotQuery, GraphSnapshotDto> handler,
+        [FromServices] ISender sender,
         CancellationToken cancellationToken) =>
-        Ok(await handler.HandleAsync(new GetGraphSnapshotQuery(boardId), cancellationToken));
+        Ok(await sender.Send(new GetGraphSnapshotQuery(boardId), cancellationToken));
 
     // UPDATE (details)
     [HttpPut("{boardId}")]
@@ -74,9 +73,9 @@ public sealed class BoardsController : ControllerBase
     public async Task<ActionResult<BoardDto>> UpdateBoard(
         string boardId,
         UpdateBoardRequest request,
-        [FromServices] ICommandHandler<RenameBoardCommand, BoardDto> handler,
+        [FromServices] ISender sender,
         CancellationToken cancellationToken) =>
-        Ok(await handler.HandleAsync(
+        Ok(await sender.Send(
             new RenameBoardCommand(boardId, request.Name, request.Description, request.DescriptionSpecified),
             cancellationToken));
 
@@ -87,9 +86,9 @@ public sealed class BoardsController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<BoardDto>> BuildBoard(
         string boardId,
-        [FromServices] ICommandHandler<BuildBoardGraphCommand, BoardDto> handler,
+        [FromServices] ISender sender,
         CancellationToken cancellationToken) =>
-        Ok(await handler.HandleAsync(new BuildBoardGraphCommand(boardId), cancellationToken));
+        Ok(await sender.Send(new BuildBoardGraphCommand(boardId), cancellationToken));
 
     // UPDATE (domain command) Built -> Published
     [HttpPost("{boardId}/publish")]
@@ -98,9 +97,9 @@ public sealed class BoardsController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<BoardDto>> PublishBoard(
         string boardId,
-        [FromServices] ICommandHandler<PublishBoardCommand, BoardDto> handler,
+        [FromServices] ISender sender,
         CancellationToken cancellationToken) =>
-        Ok(await handler.HandleAsync(new PublishBoardCommand(boardId), cancellationToken));
+        Ok(await sender.Send(new PublishBoardCommand(boardId), cancellationToken));
 
     // UPDATE (domain command) Published -> Archived
     [HttpPost("{boardId}/archive")]
@@ -109,9 +108,9 @@ public sealed class BoardsController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<BoardDto>> ArchiveBoard(
         string boardId,
-        [FromServices] ICommandHandler<ArchiveBoardCommand, BoardDto> handler,
+        [FromServices] ISender sender,
         CancellationToken cancellationToken) =>
-        Ok(await handler.HandleAsync(new ArchiveBoardCommand(boardId), cancellationToken));
+        Ok(await sender.Send(new ArchiveBoardCommand(boardId), cancellationToken));
 
     // DELETE (guarded: Published boards must be archived first)
     [HttpDelete("{boardId}")]
@@ -121,9 +120,9 @@ public sealed class BoardsController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> DeleteBoard(
         string boardId,
-        [FromServices] ICommandHandler<DeleteBoardCommand, bool> handler,
+        [FromServices] ISender sender,
         CancellationToken cancellationToken) =>
-        await handler.HandleAsync(new DeleteBoardCommand(boardId), cancellationToken)
+        await sender.Send(new DeleteBoardCommand(boardId), cancellationToken)
             ? NoContent()
             : Problem(statusCode: StatusCodes.Status404NotFound, title: "Board not found");
 }

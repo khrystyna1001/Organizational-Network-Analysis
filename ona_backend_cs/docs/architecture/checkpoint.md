@@ -30,7 +30,7 @@ Short status for future agents. Rules: [`AGENTS.md`](../../AGENTS.md). Run/API: 
 - Receipts/invoices by email (a shop requirement from the course text; not part of ONA).
 - LLM adapter and misinterpretation checks.
 - `archive/employee_data.csv` imports (supervisors by name; the 2,945 not in the file become `External` placeholders), but it is almost a forest of 2-person pairs, so its analysis is not very meaningful. A mistyped `EmpID` also creates a placeholder instead of an error (accepted trade-off, see `context-map.md` row 14).
-- MediatR package references in some `.csproj` files are unused leftovers.
+- SignalR is push-only and best effort: no replay of missed messages (the UI re-reads over HTTP after reconnecting). With several replicas of a service a Redis backplane would be needed. Hubs are outside OpenAPI.
 
 ## Event Storming hot spots (still open)
 

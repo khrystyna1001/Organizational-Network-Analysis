@@ -15,7 +15,7 @@ public sealed class AuthHandlerTests
     private async Task<string> RegisterAsync(string email = "a@b.cc", string password = "secret123")
     {
         var dto = await new RegisterUserCommandHandler(_repo, _hasher, _clock)
-            .HandleAsync(new RegisterUserCommand(email, "Ann", password));
+            .Handle(new RegisterUserCommand(email, "Ann", password), default);
         return dto.Id;
     }
 
@@ -39,7 +39,7 @@ public sealed class AuthHandlerTests
         var targetId = await RegisterAsync();
 
         var dto = await new ChangeUserRoleCommandHandler(_repo)
-            .HandleAsync(new ChangeUserRoleCommand(adminId, targetId, "admin"));
+            .Handle(new ChangeUserRoleCommand(adminId, targetId, "admin"), default);
 
         Assert.Equal("Admin", dto.Role);
         Assert.Equal(UserRole.Admin, _repo.Users.Single(u => u.Id.Value == targetId).Role);
@@ -51,7 +51,7 @@ public sealed class AuthHandlerTests
         var adminId = await SeedAdminAsync();
 
         var ex = await Assert.ThrowsAsync<CannotChangeOwnRoleException>(() =>
-            new ChangeUserRoleCommandHandler(_repo).HandleAsync(new ChangeUserRoleCommand(adminId, adminId, "User")));
+            new ChangeUserRoleCommandHandler(_repo).Handle(new ChangeUserRoleCommand(adminId, adminId, "User"), default));
 
         Assert.Equal("user.cannot_change_own_role", ex.Code);
         Assert.Equal(UserRole.Admin, _repo.Users.Single().Role);
@@ -68,7 +68,7 @@ public sealed class AuthHandlerTests
         var targetId = await RegisterAsync();
 
         var ex = await Assert.ThrowsAsync<InvalidRoleException>(() =>
-            new ChangeUserRoleCommandHandler(_repo).HandleAsync(new ChangeUserRoleCommand(adminId, targetId, role)));
+            new ChangeUserRoleCommandHandler(_repo).Handle(new ChangeUserRoleCommand(adminId, targetId, role), default));
 
         Assert.Equal("user.invalid_role", ex.Code);
     }
@@ -80,7 +80,7 @@ public sealed class AuthHandlerTests
 
         await Assert.ThrowsAsync<UserNotFoundException>(() =>
             new ChangeUserRoleCommandHandler(_repo)
-                .HandleAsync(new ChangeUserRoleCommand(adminId, Guid.NewGuid().ToString(), "Admin")));
+                .Handle(new ChangeUserRoleCommand(adminId, Guid.NewGuid().ToString(), "Admin")));
     }
 
     // ---- admin seed ----
@@ -91,8 +91,8 @@ public sealed class AuthHandlerTests
         var handler = new EnsureAdminUserCommandHandler(_repo, _hasher, _clock);
         var command = new EnsureAdminUserCommand("admin@ona.local", "Admin123!", "Administrator");
 
-        var first = await handler.HandleAsync(command);
-        var second = await handler.HandleAsync(command);
+        var first = await handler.Handle(command);
+        var second = await handler.Handle(command);
 
         Assert.True(first);
         Assert.False(second);
@@ -105,12 +105,12 @@ public sealed class AuthHandlerTests
     public async Task EnsureAdmin_WeakPassword_Throws() =>
         await Assert.ThrowsAsync<WeakPasswordException>(() =>
             new EnsureAdminUserCommandHandler(_repo, _hasher, _clock)
-                .HandleAsync(new EnsureAdminUserCommand("admin@ona.local", "short", null)));
+                .Handle(new EnsureAdminUserCommand("admin@ona.local", "short", null), default));
 
     private async Task<string> SeedAdminAsync()
     {
         await new EnsureAdminUserCommandHandler(_repo, _hasher, _clock)
-            .HandleAsync(new EnsureAdminUserCommand("admin@ona.local", "Admin123!", "Administrator"));
+            .Handle(new EnsureAdminUserCommand("admin@ona.local", "Admin123!", "Administrator"), default);
         return _repo.Users.Single(u => u.Role == UserRole.Admin).Id.Value;
     }
 
@@ -121,7 +121,7 @@ public sealed class AuthHandlerTests
     {
         await RegisterAsync();
 
-        var sent = await RequestReset().HandleAsync(new RequestPasswordResetCommand("nobody@b.cc"));
+        var sent = await RequestReset().Handle(new RequestPasswordResetCommand("nobody@b.cc"), default);
 
         Assert.False(sent);
         Assert.Empty(_email.Sent);
@@ -130,7 +130,7 @@ public sealed class AuthHandlerTests
     [Fact]
     public async Task RequestReset_InvalidEmail_IsSilentAndSendsNothing()
     {
-        var sent = await RequestReset().HandleAsync(new RequestPasswordResetCommand("not-an-email"));
+        var sent = await RequestReset().Handle(new RequestPasswordResetCommand("not-an-email"), default);
 
         Assert.False(sent);
         Assert.Empty(_email.Sent);
@@ -141,7 +141,7 @@ public sealed class AuthHandlerTests
     {
         await RegisterAsync();
 
-        var sent = await RequestReset().HandleAsync(new RequestPasswordResetCommand("A@B.cc"));
+        var sent = await RequestReset().Handle(new RequestPasswordResetCommand("A@B.cc"), default);
 
         Assert.True(sent);
         var mail = Assert.Single(_email.Sent);
@@ -159,15 +159,15 @@ public sealed class AuthHandlerTests
     public async Task ConfirmReset_ValidToken_ChangesPasswordAndConsumesToken()
     {
         await RegisterAsync();
-        await RequestReset().HandleAsync(new RequestPasswordResetCommand("a@b.cc"));
+        await RequestReset().Handle(new RequestPasswordResetCommand("a@b.cc"), default);
 
-        await ConfirmReset().HandleAsync(new ConfirmPasswordResetCommand("a@b.cc", "token-1", "newSecret9"));
+        await ConfirmReset().Handle(new ConfirmPasswordResetCommand("a@b.cc", "token-1", "newSecret9"), default);
 
         var user = _repo.Users.Single();
         Assert.Equal("hashed:newSecret9", user.PasswordHash);
         Assert.Null(user.PasswordResetTokenHash);
         var ex = await Assert.ThrowsAsync<InvalidResetTokenException>(() =>
-            ConfirmReset().HandleAsync(new ConfirmPasswordResetCommand("a@b.cc", "token-1", "another99")));
+            ConfirmReset().Handle(new ConfirmPasswordResetCommand("a@b.cc", "token-1", "another99"), default));
         Assert.Equal("user.invalid_reset_token", ex.Code);
     }
 
@@ -175,10 +175,10 @@ public sealed class AuthHandlerTests
     public async Task ConfirmReset_WrongToken_Throws()
     {
         await RegisterAsync();
-        await RequestReset().HandleAsync(new RequestPasswordResetCommand("a@b.cc"));
+        await RequestReset().Handle(new RequestPasswordResetCommand("a@b.cc"), default);
 
         await Assert.ThrowsAsync<InvalidResetTokenException>(() =>
-            ConfirmReset().HandleAsync(new ConfirmPasswordResetCommand("a@b.cc", "token-999", "newSecret9")));
+            ConfirmReset().Handle(new ConfirmPasswordResetCommand("a@b.cc", "token-999", "newSecret9"), default));
 
         Assert.Equal("hashed:secret123", _repo.Users.Single().PasswordHash);
     }
@@ -187,23 +187,23 @@ public sealed class AuthHandlerTests
     public async Task ConfirmReset_ExpiredToken_Throws()
     {
         await RegisterAsync();
-        await RequestReset().HandleAsync(new RequestPasswordResetCommand("a@b.cc"));
+        await RequestReset().Handle(new RequestPasswordResetCommand("a@b.cc"), default);
         _clock.Advance(TimeSpan.FromMinutes(31));
 
         await Assert.ThrowsAsync<InvalidResetTokenException>(() =>
-            ConfirmReset().HandleAsync(new ConfirmPasswordResetCommand("a@b.cc", "token-1", "newSecret9")));
+            ConfirmReset().Handle(new ConfirmPasswordResetCommand("a@b.cc", "token-1", "newSecret9"), default));
     }
 
     [Fact]
     public async Task ConfirmReset_NewRequestReplacesOldToken()
     {
         await RegisterAsync();
-        await RequestReset().HandleAsync(new RequestPasswordResetCommand("a@b.cc"));
-        await RequestReset().HandleAsync(new RequestPasswordResetCommand("a@b.cc"));
+        await RequestReset().Handle(new RequestPasswordResetCommand("a@b.cc"), default);
+        await RequestReset().Handle(new RequestPasswordResetCommand("a@b.cc"), default);
 
         await Assert.ThrowsAsync<InvalidResetTokenException>(() =>
-            ConfirmReset().HandleAsync(new ConfirmPasswordResetCommand("a@b.cc", "token-1", "newSecret9")));
-        await ConfirmReset().HandleAsync(new ConfirmPasswordResetCommand("a@b.cc", "token-2", "newSecret9"));
+            ConfirmReset().Handle(new ConfirmPasswordResetCommand("a@b.cc", "token-1", "newSecret9"), default));
+        await ConfirmReset().Handle(new ConfirmPasswordResetCommand("a@b.cc", "token-2", "newSecret9"), default);
 
         Assert.Equal("hashed:newSecret9", _repo.Users.Single().PasswordHash);
     }
@@ -211,16 +211,16 @@ public sealed class AuthHandlerTests
     [Fact]
     public async Task ConfirmReset_UnknownEmail_LooksLikeAnInvalidToken() =>
         await Assert.ThrowsAsync<InvalidResetTokenException>(() =>
-            ConfirmReset().HandleAsync(new ConfirmPasswordResetCommand("nobody@b.cc", "token-1", "newSecret9")));
+            ConfirmReset().Handle(new ConfirmPasswordResetCommand("nobody@b.cc", "token-1", "newSecret9"), default));
 
     [Fact]
     public async Task ConfirmReset_WeakPassword_ThrowsAndKeepsToken()
     {
         await RegisterAsync();
-        await RequestReset().HandleAsync(new RequestPasswordResetCommand("a@b.cc"));
+        await RequestReset().Handle(new RequestPasswordResetCommand("a@b.cc"), default);
 
         await Assert.ThrowsAsync<WeakPasswordException>(() =>
-            ConfirmReset().HandleAsync(new ConfirmPasswordResetCommand("a@b.cc", "token-1", "short")));
+            ConfirmReset().Handle(new ConfirmPasswordResetCommand("a@b.cc", "token-1", "short"), default));
 
         Assert.NotNull(_repo.Users.Single().PasswordResetTokenHash);
     }
@@ -233,7 +233,7 @@ public sealed class AuthHandlerTests
         var id = await RegisterAsync();
 
         await new ChangePasswordCommandHandler(_repo, _hasher)
-            .HandleAsync(new ChangePasswordCommand(id, "secret123", "newSecret9"));
+            .Handle(new ChangePasswordCommand(id, "secret123", "newSecret9"), default);
 
         Assert.Equal("hashed:newSecret9", _repo.Users.Single().PasswordHash);
     }
@@ -245,7 +245,7 @@ public sealed class AuthHandlerTests
 
         var ex = await Assert.ThrowsAsync<InvalidCredentialsException>(() =>
             new ChangePasswordCommandHandler(_repo, _hasher)
-                .HandleAsync(new ChangePasswordCommand(id, "wrong", "newSecret9")));
+                .Handle(new ChangePasswordCommand(id, "wrong", "newSecret9"), default));
 
         Assert.Equal("user.invalid_credentials", ex.Code);
         Assert.Equal("hashed:secret123", _repo.Users.Single().PasswordHash);
@@ -258,7 +258,7 @@ public sealed class AuthHandlerTests
 
         await Assert.ThrowsAsync<WeakPasswordException>(() =>
             new ChangePasswordCommandHandler(_repo, _hasher)
-                .HandleAsync(new ChangePasswordCommand(id, "secret123", "short")));
+                .Handle(new ChangePasswordCommand(id, "secret123", "short"), default));
 
         Assert.Equal("hashed:secret123", _repo.Users.Single().PasswordHash);
     }
@@ -267,5 +267,5 @@ public sealed class AuthHandlerTests
     public async Task ChangePassword_UnknownUser_Throws() =>
         await Assert.ThrowsAsync<UserNotFoundException>(() =>
             new ChangePasswordCommandHandler(_repo, _hasher)
-                .HandleAsync(new ChangePasswordCommand(Guid.NewGuid().ToString(), "a", "newSecret9")));
+                .Handle(new ChangePasswordCommand(Guid.NewGuid().ToString(), "a", "newSecret9")));
 }

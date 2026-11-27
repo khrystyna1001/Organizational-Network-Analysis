@@ -1,5 +1,3 @@
-using ONA.Insights.Application.Abstractions.Messaging;
-using ONA.Insights.Application.DTOs;
 using ONA.Insights.Application.Events;
 using ONA.Insights.Application.Features.Recommendations.Commands;
 using ONA.Insights.Application.Ports;
@@ -24,12 +22,12 @@ public sealed record MessageResult(MessageOutcome Outcome, string? Reason = null
 
 /// <summary>
 /// Reaction to <c>AnalysisCompleted</c>: generate recommendations for the run.
+/// Sends the command through the mediator (not straight to the handler) so pipeline behaviors apply.
 /// Redelivery is safe because <see cref="GenerateRecommendationsCommandHandler"/> is idempotent per run + node.
 /// </summary>
-public sealed class AnalysisCompletedMessageHandler(
-    ICommandHandler<GenerateRecommendationsCommand, IReadOnlyList<RecommendationDto>> generate)
+public sealed class AnalysisCompletedMessageHandler(ISender sender)
 {
-    public async Task<MessageResult> HandleAsync(string? json, CancellationToken cancellationToken = default)
+    public async Task<MessageResult> Handle(string? json, CancellationToken cancellationToken = default)
     {
         var message = AnalysisCompletedMessage.TryParse(json);
         if (message is null)
@@ -39,7 +37,7 @@ public sealed class AnalysisCompletedMessageHandler(
 
         try
         {
-            await generate.HandleAsync(new GenerateRecommendationsCommand(message.AnalysisRunId), cancellationToken);
+            await sender.Send(new GenerateRecommendationsCommand(message.AnalysisRunId), cancellationToken);
             return new MessageResult(MessageOutcome.Handled);
         }
         catch (DomainException exception)

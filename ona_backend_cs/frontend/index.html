@@ -9,7 +9,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2300D2FF'/%3E%3Cstop offset='1' stop-color='%236366F1'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23g)'/%3E%3Cg fill='%23fff'%3E%3Ccircle cx='10' cy='11' r='3'/%3E%3Ccircle cx='23' cy='12' r='3'/%3E%3Ccircle cx='16' cy='23' r='3'/%3E%3C/g%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="vendor/vis-network.css">
   <link rel="stylesheet" href="css/styles.css">
 </head>
@@ -66,7 +66,7 @@
       <div class="brand"><b>ONA</b><span>Organization Network Analyzer</span></div>
       <div class="usercard">
         <div class="avatar" id="user-avatar"></div>
-        <div><div id="user-name" class="strong"></div><div id="user-role" class="mono tiny muted upper"></div></div>
+        <div><div id="user-name" class="strong"></div><div id="user-role" class="muted small"></div></div>
       </div>
 
       <div class="sec">Boards</div>
@@ -124,11 +124,14 @@
             <div class="muted small" id="board-meta"></div>
             <ol class="stepper" id="stepper" aria-label="Board lifecycle"></ol>
           </div>
-          <div class="actions" id="actions"></div>
+          <div class="top-right">
+            <span id="live" class="live" data-state="connecting" role="status">
+              <i aria-hidden="true"></i><span id="live-text">Connecting…</span>
+            </span>
+            <div class="actions" id="actions"></div>
+          </div>
         </header>
-        <p class="muted small" id="board-note"></p>
-
-        <section class="kpis" id="kpis"></section>
+        <p class="muted small note" id="board-note" aria-live="polite"></p>
 
         <section class="split">
           <div class="card canvas">
@@ -156,6 +159,8 @@
             <section class="card" id="ranking"></section>
           </div>
         </section>
+
+        <section class="kpis" id="kpis"></section>
 
         <section>
           <div class="panel-title big">Recommendations <span class="count" id="recs-count" hidden></span></div>
@@ -195,6 +200,7 @@
   </dialog>
 
   <script src="vendor/vis-network.min.js"></script>
+  <script src="vendor/signalr.min.js"></script>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>

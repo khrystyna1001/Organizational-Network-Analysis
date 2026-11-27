@@ -1,5 +1,6 @@
 using ONA.Insights.Application.Features.Recommendations.Commands;
 using ONA.Insights.Application.Features.Recommendations.Queries;
+using ONA.Insights.Application.Notifications;
 using ONA.Insights.Application.Ports;
 using ONA.Insights.Domain.Aggregates;
 using ONA.Insights.Domain.Exceptions;
@@ -13,17 +14,52 @@ public sealed class RecommendationHandlerTests
     private readonly InMemoryRecommendationRepository _repo = new();
     private readonly FakeInsightGenerator _generator = new();
 
-    private GenerateRecommendationsCommandHandler Generator(AnalysisRunResult? run) =>
-        new(_repo, new FakeAnalysisResultsPort(run), _generator, new FixedClock(Now));
+    private readonly RecordingPublisher _notifications = new();
 
-    private RespondToRecommendationCommandHandler Responder() => new(_repo, new FixedClock(Now));
+    private GenerateRecommendationsCommandHandler Generator(AnalysisRunResult? run) =>
+        new(_repo, new FakeAnalysisResultsPort(run), _generator, new FixedClock(Now), _notifications);
+
+    private RespondToRecommendationCommandHandler Responder() => new(_repo, new FixedClock(Now), _notifications);
+
+    [Fact]
+    public async Task Generate_PublishesOneNotificationWithTheNumberOfNewRecommendations()
+    {
+        var handler = Generator(Runs.Completed("run1", "n2", "n3"));
+
+        await handler.Handle(new GenerateRecommendationsCommand("run1"), default);
+
+        var notification = Assert.IsType<RecommendationsGeneratedNotification>(Assert.Single(_notifications.Published));
+        Assert.Equal(("run1", "b1", 2), (notification.AnalysisRunId, notification.BoardId, notification.Count));
+    }
+
+    [Fact]
+    public async Task Generate_Twice_PublishesNothingTheSecondTime()
+    {
+        var handler = Generator(Runs.Completed("run1", "n2", "n3"));
+        await handler.Handle(new GenerateRecommendationsCommand("run1"), default);
+
+        await handler.Handle(new GenerateRecommendationsCommand("run1"), default);
+
+        Assert.Single(_notifications.Published);
+    }
+
+    [Fact]
+    public async Task Generate_WhenNotificationFails_StillReturnsSavedRecommendations()
+    {
+        _notifications.ThrowOnPublish = true;
+
+        var result = await Generator(Runs.Completed("run1", "n2")).Handle(new GenerateRecommendationsCommand("run1"), default);
+
+        Assert.Single(result);
+        Assert.Single(_repo.Items);
+    }
 
     [Fact]
     public async Task Generate_CreatesOneRecommendationPerBottleneckWithProvenance()
     {
         var handler = Generator(Runs.Completed("run1", "n2", "n3"));
 
-        var result = await handler.HandleAsync(new GenerateRecommendationsCommand("run1"));
+        var result = await handler.Handle(new GenerateRecommendationsCommand("run1"), default);
 
         Assert.Equal(2, result.Count);
         Assert.Equal(2, _repo.Items.Count);
@@ -42,9 +78,9 @@ public sealed class RecommendationHandlerTests
     public async Task Generate_Twice_ReturnsExistingWithoutDuplicates()
     {
         var handler = Generator(Runs.Completed("run1", "n2", "n3"));
-        var first = await handler.HandleAsync(new GenerateRecommendationsCommand("run1"));
+        var first = await handler.Handle(new GenerateRecommendationsCommand("run1"), default);
 
-        var second = await handler.HandleAsync(new GenerateRecommendationsCommand("run1"));
+        var second = await handler.Handle(new GenerateRecommendationsCommand("run1"), default);
 
         Assert.Equal(first.Select(r => r.Id), second.Select(r => r.Id));
         Assert.Equal(2, _repo.Items.Count);
@@ -57,7 +93,7 @@ public sealed class RecommendationHandlerTests
         var running = Runs.Completed("run1", "n1") with { Status = AnalysisRunStatus.Running };
 
         var ex = await Assert.ThrowsAsync<AnalysisRunNotCompletedException>(() =>
-            Generator(running).HandleAsync(new GenerateRecommendationsCommand("run1")));
+            Generator(running).Handle(new GenerateRecommendationsCommand("run1"), default));
 
         Assert.Equal("recommendation.analysis_run_not_completed", ex.Code);
         Assert.Empty(_repo.Items);
@@ -67,7 +103,7 @@ public sealed class RecommendationHandlerTests
     public async Task Generate_NoBottlenecks_Throws()
     {
         var ex = await Assert.ThrowsAsync<NoBottlenecksException>(() =>
-            Generator(Runs.Completed("run1")).HandleAsync(new GenerateRecommendationsCommand("run1")));
+            Generator(Runs.Completed("run1")).Handle(new GenerateRecommendationsCommand("run1"), default));
 
         Assert.Equal("recommendation.no_bottlenecks", ex.Code);
     }
@@ -76,7 +112,7 @@ public sealed class RecommendationHandlerTests
     public async Task Generate_RunNotFound_Throws()
     {
         var ex = await Assert.ThrowsAsync<AnalysisRunNotFoundException>(() =>
-            Generator(null).HandleAsync(new GenerateRecommendationsCommand("missing")));
+            Generator(null).Handle(new GenerateRecommendationsCommand("missing"), default));
 
         Assert.Equal("recommendation.analysis_run_not_found", ex.Code);
     }
@@ -84,9 +120,9 @@ public sealed class RecommendationHandlerTests
     [Fact]
     public async Task Respond_Approve_UpdatesStatusAndSaves()
     {
-        var created = await Generator(Runs.Completed("run1", "n2")).HandleAsync(new GenerateRecommendationsCommand("run1"));
+        var created = await Generator(Runs.Completed("run1", "n2")).Handle(new GenerateRecommendationsCommand("run1"), default);
 
-        var dto = await Responder().HandleAsync(
+        var dto = await Responder().Handle(
             new RespondToRecommendationCommand(created[0].Id, "Approve", "go", "user-1"));
 
         Assert.Equal("Approved", dto.Status);
@@ -97,11 +133,36 @@ public sealed class RecommendationHandlerTests
     }
 
     [Fact]
+    public async Task Respond_PublishesNotificationWithTheNewStatus()
+    {
+        var created = await Generator(Runs.Completed("run1", "n2")).Handle(new GenerateRecommendationsCommand("run1"), default);
+        _notifications.Published.Clear();
+
+        await Responder().Handle(new RespondToRecommendationCommand(created[0].Id, "approve", null, "user-1"), default);
+
+        var notification = Assert.IsType<RecommendationRespondedNotification>(Assert.Single(_notifications.Published));
+        Assert.Equal((created[0].Id, "run1", "b1", "Approved"),
+            (notification.RecommendationId, notification.AnalysisRunId, notification.BoardId, notification.Status));
+    }
+
+    [Fact]
+    public async Task Respond_WhenNotificationFails_StillSavesTheDecision()
+    {
+        var created = await Generator(Runs.Completed("run1", "n2")).Handle(new GenerateRecommendationsCommand("run1"), default);
+        _notifications.ThrowOnPublish = true;
+
+        var dto = await Responder().Handle(new RespondToRecommendationCommand(created[0].Id, "reject", null, null), default);
+
+        Assert.Equal("Rejected", dto.Status);
+        Assert.Equal(1, _repo.SaveCount);
+    }
+
+    [Fact]
     public async Task Respond_Reject_UpdatesStatus()
     {
-        var created = await Generator(Runs.Completed("run1", "n2")).HandleAsync(new GenerateRecommendationsCommand("run1"));
+        var created = await Generator(Runs.Completed("run1", "n2")).Handle(new GenerateRecommendationsCommand("run1"), default);
 
-        var dto = await Responder().HandleAsync(new RespondToRecommendationCommand(created[0].Id, "reject", null, null));
+        var dto = await Responder().Handle(new RespondToRecommendationCommand(created[0].Id, "reject", null, null), default);
 
         Assert.Equal("Rejected", dto.Status);
     }
@@ -109,11 +170,11 @@ public sealed class RecommendationHandlerTests
     [Fact]
     public async Task Respond_Twice_ThrowsInvalidStateTransition()
     {
-        var created = await Generator(Runs.Completed("run1", "n2")).HandleAsync(new GenerateRecommendationsCommand("run1"));
-        await Responder().HandleAsync(new RespondToRecommendationCommand(created[0].Id, "approve", null, null));
+        var created = await Generator(Runs.Completed("run1", "n2")).Handle(new GenerateRecommendationsCommand("run1"), default);
+        await Responder().Handle(new RespondToRecommendationCommand(created[0].Id, "approve", null, null), default);
 
         var ex = await Assert.ThrowsAsync<InvalidRecommendationStateTransitionException>(() =>
-            Responder().HandleAsync(new RespondToRecommendationCommand(created[0].Id, "reject", null, null)));
+            Responder().Handle(new RespondToRecommendationCommand(created[0].Id, "reject", null, null), default));
 
         Assert.Equal("recommendation.invalid_state_transition", ex.Code);
     }
@@ -124,10 +185,10 @@ public sealed class RecommendationHandlerTests
     [InlineData(null)]
     public async Task Respond_InvalidResponse_Throws(string? response)
     {
-        var created = await Generator(Runs.Completed("run1", "n2")).HandleAsync(new GenerateRecommendationsCommand("run1"));
+        var created = await Generator(Runs.Completed("run1", "n2")).Handle(new GenerateRecommendationsCommand("run1"), default);
 
         var ex = await Assert.ThrowsAsync<InvalidRecommendationResponseException>(() =>
-            Responder().HandleAsync(new RespondToRecommendationCommand(created[0].Id, response, null, null)));
+            Responder().Handle(new RespondToRecommendationCommand(created[0].Id, response, null, null), default));
 
         Assert.Equal("recommendation.invalid_response", ex.Code);
         Assert.Equal(RecommendationStatus.Delivered, _repo.Items[0].Status);
@@ -137,7 +198,7 @@ public sealed class RecommendationHandlerTests
     public async Task Respond_UnknownRecommendation_ThrowsNotFound()
     {
         var ex = await Assert.ThrowsAsync<RecommendationNotFoundException>(() =>
-            Responder().HandleAsync(new RespondToRecommendationCommand("nope", "approve", null, null)));
+            Responder().Handle(new RespondToRecommendationCommand("nope", "approve", null, null), default));
 
         Assert.Equal("recommendation.not_found", ex.Code);
     }
@@ -145,11 +206,11 @@ public sealed class RecommendationHandlerTests
     [Fact]
     public async Task GetById_ReturnsDtoOrNull()
     {
-        var created = await Generator(Runs.Completed("run1", "n2")).HandleAsync(new GenerateRecommendationsCommand("run1"));
+        var created = await Generator(Runs.Completed("run1", "n2")).Handle(new GenerateRecommendationsCommand("run1"), default);
         var handler = new GetRecommendationByIdQueryHandler(_repo);
 
-        var found = await handler.HandleAsync(new GetRecommendationByIdQuery(created[0].Id));
-        var missing = await handler.HandleAsync(new GetRecommendationByIdQuery("nope"));
+        var found = await handler.Handle(new GetRecommendationByIdQuery(created[0].Id), default);
+        var missing = await handler.Handle(new GetRecommendationByIdQuery("nope"), default);
 
         Assert.Equal(created[0].Id, found?.Id);
         Assert.Null(missing);
@@ -158,15 +219,15 @@ public sealed class RecommendationHandlerTests
     [Fact]
     public async Task List_FiltersByRunAndStatus()
     {
-        var a = await Generator(Runs.Completed("runA", "n1", "n2")).HandleAsync(new GenerateRecommendationsCommand("runA"));
-        await Generator(Runs.Completed("runB", "n3")).HandleAsync(new GenerateRecommendationsCommand("runB"));
-        await Responder().HandleAsync(new RespondToRecommendationCommand(a[0].Id, "approve", null, null));
+        var a = await Generator(Runs.Completed("runA", "n1", "n2")).Handle(new GenerateRecommendationsCommand("runA"), default);
+        await Generator(Runs.Completed("runB", "n3")).Handle(new GenerateRecommendationsCommand("runB"), default);
+        await Responder().Handle(new RespondToRecommendationCommand(a[0].Id, "approve", null, null), default);
         var handler = new GetRecommendationsQueryHandler(_repo);
 
-        var all = await handler.HandleAsync(new GetRecommendationsQuery(null, null));
-        var runA = await handler.HandleAsync(new GetRecommendationsQuery("runA", null));
-        var approved = await handler.HandleAsync(new GetRecommendationsQuery(null, "approved"));
-        var delivered = await handler.HandleAsync(new GetRecommendationsQuery("runA", "Delivered"));
+        var all = await handler.Handle(new GetRecommendationsQuery(null, null), default);
+        var runA = await handler.Handle(new GetRecommendationsQuery("runA", null), default);
+        var approved = await handler.Handle(new GetRecommendationsQuery(null, "approved"), default);
+        var delivered = await handler.Handle(new GetRecommendationsQuery("runA", "Delivered"), default);
 
         Assert.Equal(3, all.Count);
         Assert.Equal(2, runA.Count);
@@ -178,6 +239,6 @@ public sealed class RecommendationHandlerTests
     public async Task List_InvalidStatus_Throws()
     {
         await Assert.ThrowsAsync<InvalidRecommendationResponseException>(() =>
-            new GetRecommendationsQueryHandler(_repo).HandleAsync(new GetRecommendationsQuery(null, "bogus")));
+            new GetRecommendationsQueryHandler(_repo).Handle(new GetRecommendationsQuery(null, "bogus"), default));
     }
 }

@@ -18,8 +18,11 @@ public sealed class AnalysisCompletedMessageHandlerTests
 
     private readonly InMemoryRecommendationRepository _repo = new();
 
+    private readonly RecordingPublisher _notifications = new();
+
     private AnalysisCompletedMessageHandler HandlerFor(IAnalysisResultsPort port) =>
-        new(new GenerateRecommendationsCommandHandler(_repo, port, new FakeInsightGenerator(), new FixedClock(Now)));
+        new(new SingleHandlerSender(
+            new GenerateRecommendationsCommandHandler(_repo, port, new FakeInsightGenerator(), new FixedClock(Now), _notifications)));
 
     private static string Json(string runId) =>
         $$"""{"event_id":"e1","occurred_at":"2026-11-23T12:00:00Z","analysis_run_id":"{{runId}}","board_id":"b1","graph_version_id":"v1"}""";
@@ -29,7 +32,7 @@ public sealed class AnalysisCompletedMessageHandlerTests
     {
         var handler = HandlerFor(new FakeAnalysisResultsPort(Runs.Completed("run1", "n2", "n3")));
 
-        var result = await handler.HandleAsync(Json("run1"));
+        var result = await handler.Handle(Json("run1"));
 
         Assert.Equal(MessageOutcome.Handled, result.Outcome);
         Assert.Equal(2, _repo.Items.Count);
@@ -40,8 +43,8 @@ public sealed class AnalysisCompletedMessageHandlerTests
     {
         var handler = HandlerFor(new FakeAnalysisResultsPort(Runs.Completed("run1", "n2", "n3")));
 
-        await handler.HandleAsync(Json("run1"));
-        var second = await handler.HandleAsync(Json("run1"));
+        await handler.Handle(Json("run1"));
+        var second = await handler.Handle(Json("run1"));
 
         Assert.Equal(MessageOutcome.Handled, second.Outcome);
         Assert.Equal(2, _repo.Items.Count);
@@ -52,7 +55,7 @@ public sealed class AnalysisCompletedMessageHandlerTests
     {
         var handler = HandlerFor(new FakeAnalysisResultsPort(Runs.Completed("run1")));
 
-        var result = await handler.HandleAsync(Json("run1"));
+        var result = await handler.Handle(Json("run1"));
 
         Assert.Equal(MessageOutcome.Skipped, result.Outcome);
         Assert.Contains("recommendation.no_bottlenecks", result.Reason);
@@ -65,7 +68,7 @@ public sealed class AnalysisCompletedMessageHandlerTests
         var running = Runs.Completed("run1", "n1") with { Status = AnalysisRunStatus.Running };
         var handler = HandlerFor(new FakeAnalysisResultsPort(running));
 
-        var result = await handler.HandleAsync(Json("run1"));
+        var result = await handler.Handle(Json("run1"));
 
         Assert.Equal(MessageOutcome.Skipped, result.Outcome);
         Assert.Empty(_repo.Items);
@@ -76,7 +79,7 @@ public sealed class AnalysisCompletedMessageHandlerTests
     {
         var handler = HandlerFor(new FakeAnalysisResultsPort(null));
 
-        var result = await handler.HandleAsync(Json("missing"));
+        var result = await handler.Handle(Json("missing"));
 
         Assert.Equal(MessageOutcome.Skipped, result.Outcome);
     }
@@ -90,7 +93,7 @@ public sealed class AnalysisCompletedMessageHandlerTests
     {
         var handler = HandlerFor(new FakeAnalysisResultsPort(Runs.Completed("run1", "n1")));
 
-        var result = await handler.HandleAsync(payload);
+        var result = await handler.Handle(payload);
 
         Assert.Equal(MessageOutcome.Skipped, result.Outcome);
         Assert.Empty(_repo.Items);
@@ -101,7 +104,7 @@ public sealed class AnalysisCompletedMessageHandlerTests
     {
         var handler = HandlerFor(new UnreachableAnalysisPort());
 
-        var result = await handler.HandleAsync(Json("run1"));
+        var result = await handler.Handle(Json("run1"));
 
         Assert.Equal(MessageOutcome.Retry, result.Outcome);
         Assert.Empty(_repo.Items);

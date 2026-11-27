@@ -1,17 +1,16 @@
 using ONA.Graph.Application.Abstractions;
-using ONA.Graph.Application.Abstractions.Messaging;
 using ONA.Graph.Application.DTOs;
 using ONA.Graph.Domain.Aggregates;
 
 namespace ONA.Graph.Application.Features.Boards.Commands;
 
 /// <summary>CREATE: CreateBoard (Draft) – docs/architecture/stateDiagram-analysis.md.</summary>
-public sealed record CreateBoardCommand(string? Name, string? Description) : ICommand<BoardDto>;
+public sealed record CreateBoardCommand(string? Name, string? Description) : IRequest<BoardDto>;
 
 public sealed class CreateBoardCommandHandler(IBoardRepository repository)
-    : ICommandHandler<CreateBoardCommand, BoardDto>
+    : IRequestHandler<CreateBoardCommand, BoardDto>
 {
-    public async Task<BoardDto> HandleAsync(
+    public async Task<BoardDto> Handle(
         CreateBoardCommand command,
         CancellationToken cancellationToken = default)
     {

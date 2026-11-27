@@ -18,7 +18,7 @@ Rules for code and AI agents: [`AGENTS.md`](AGENTS.md). Design docs: [`docs/arch
 ```text
 src/Services/<Context>/ONA.<Context>.{Domain,Application,Infrastructure,Presentation}
 tests/<Context>/   Domain, Application, Infrastructure, Architecture tests (Graph also has MySQL integration tests)
-frontend/          web UI (index.html, css/, js/, vendor/vis-network)
+frontend/          web UI (index.html, css/, js/, vendor/vis-network + signalr client)
 nginx/             reverse proxy config
 sample/            valid example CSV
 ```
@@ -33,7 +33,7 @@ Requirements: .NET 10 SDK, Docker.
 docker compose up --build mysql graph-api identity-api analysis-api insights-api proxy
 ```
 
-Open `http://localhost:8080`, register (or sign in as the seeded admin `admin@ona.local` / `Admin123!`), import `sample/employees.csv`, then build → publish the board. Publishing triggers the analysis and the recommendations through Kafka; press Refresh in the UI. Published ports: proxy 8080, MySQL 3306, Mailpit 8025 (password-reset emails), Kafka 9092. The APIs are reachable as `http://localhost:8080/api/v1/{boards,nodes,connections,data,users,analysis-runs,recommendations}`. The Dockerfile uses `ubuntu:26.04` (Docker Hub) with apt-installed .NET 10, not the `mcr.microsoft.com` images (see the comment at the top of the Dockerfile). If you change a database schema, reset with `docker compose down -v` (new services use `EnsureCreated`, not migrations).
+Open `http://localhost:8080`, register (or sign in as the seeded admin `admin@ona.local` / `Admin123!`), import `sample/employees.csv`, then build → publish the board. Publishing triggers the analysis and the recommendations through Kafka; the UI updates live over SignalR (the status pill in the header shows live / connecting / offline; Refresh appears only when offline). Published ports: proxy 8080, MySQL 3306, Mailpit 8025 (password-reset emails), Kafka 9092. The APIs are reachable as `http://localhost:8080/api/v1/{boards,nodes,connections,data,users,analysis-runs,recommendations}`. The Dockerfile uses `ubuntu:26.04` (Docker Hub) with apt-installed .NET 10, not the `mcr.microsoft.com` images (see the comment at the top of the Dockerfile). If you change a database schema, reset with `docker compose down -v` (new services use `EnsureCreated`, not migrations).
 
 **APIs only, locally** (no Kafka by default: the publish → analysis → recommendations chain then needs the manual calls below) (MySQL in Docker, one terminal per service; the UI needs the proxy, so it runs in Docker only)
 

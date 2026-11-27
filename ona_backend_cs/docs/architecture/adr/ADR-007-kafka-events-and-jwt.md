@@ -2,6 +2,7 @@
 
 * **Status:** Accepted
 * **Date:** 2026-11-23
+* **Related:** [ADR-008](ADR-008-mediatr-and-signalr.md) (Kafka consumers dispatch through MediatR; the UI gets live push over SignalR; hubs accept the JWT as `access_token` query)
 * **Amends:** [ADR-006](ADR-006-services-over-http-no-broker.md) (HTTP stays for reads; a broker is now used for events)
 
 ## Context

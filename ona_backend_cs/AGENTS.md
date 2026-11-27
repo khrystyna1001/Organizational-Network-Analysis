@@ -25,9 +25,9 @@ Done = `Failed: 0`. Never weaken a test to make it pass.
 - **Domain** – no packages, no references.
 - **Application** – references Domain only. CQRS in `Features/<Aggregate>/{Commands,Queries}`, ports in `Ports/`.
 - **Infrastructure** – EF Core (MySQL), repositories, `Acl/`. All classes `internal sealed` except `DependencyInjection` and EF migrations.
-- **Presentation** – (Graph) `BoardsController` and `OrganizationImportController` call one CQRS handler via `[FromServices]`; nodes/connections still go through `IGraphService`.
+- **Presentation** – (Graph) `BoardsController` and `OrganizationImportController` call one CQRS handler via `[FromServices]`; nodes and connections dispatch one MediatR request each via `ISender` (handlers delegate to `IGraphService`).
 
-CQRS: commands load tracked aggregates and call aggregate methods; queries use `AsNoTracking()` and return DTOs. No MediatR.
+CQRS: commands load tracked aggregates and call aggregate methods; queries use `AsNoTracking()` and return DTOs. MediatR 12.4.0 (v13+ is commercial; do not upgrade) dispatches requests via `ISender`; handlers implement `IRequestHandler<TRequest, TResponse>` and are discovered by assembly scanning. Kafka consumers also go through `ISender`. Each service registers a `RequestLoggingBehavior` (request type name and duration only, never content). Application raises `INotification`s (`IPublisher`) for things the UI should see live; Presentation handlers forward them to SignalR hubs, so Application never references `Microsoft.AspNetCore`. Notifications are best effort and never fail the request (ADR-008).
 
 ## 5. Domain
 - No `public set` / `init`; collections as `IReadOnlyCollection<T>`.
@@ -52,10 +52,10 @@ CQRS: commands load tracked aggregates and call aggregate methods; queries use `
 - MySQL 8.4, `snake_case` columns; schema changes need a migration.
 
 ## 9. Other contexts
-- Same layering, CQRS and domain rules as Graph. No MediatR. Kafka only for the two events in ADR-007; reads stay on HTTP.
+- Same layering, CQRS (MediatR) and domain rules as Graph. Kafka only for the two events in ADR-007; reads stay on HTTP.
 - Every API is `[Authorize]` (JWT, shared `Jwt:*` config); anonymous are only the health endpoint and Identity's register, login and password-reset endpoints. Roles from the `role` claim. Consumers use a `Service` token. Events are published after the save and never fail the request; consumers are idempotent and commit only after handling.
 - Without `Kafka:BootstrapServers` the publisher is a no-op and no consumer runs.
 - Cross-context calls go through an Application port + `Infrastructure/Acl` HTTP adapter; contexts share ids only, never code.
 - Analysis reads `GET /boards/{id}/snapshot`; Insights reads `GET /analysis-runs/{id}`.
 - Each service has its own MySQL database (`ona_<context>`).
-- Frontend (`frontend/`, plain HTML/CSS/JS, no build step; vis-network is vendored in `vendor/`) only calls the HTTP APIs, same-origin through the nginx proxy, which also serves the files. A new public route needs a proxy rule. Put API data into the DOM with text nodes only (see `h()` in `js/app.js`), never `innerHTML`.
+- Frontend (`frontend/`, plain HTML/CSS/JS, no build step; vis-network is vendored in `vendor/`) calls the HTTP APIs and the SignalR hubs `/hubs/analysis` and `/hubs/insights` (WebSocket; vendored `vendor/signalr.min.js`, MIT), same-origin through the nginx proxy, which also serves the files. Hubs only push; the UI falls back to polling when they are offline. A new public route needs a proxy rule (hubs need the WebSocket Upgrade headers). Put API data into the DOM with text nodes only (see `h()` in `js/app.js`), never `innerHTML`.

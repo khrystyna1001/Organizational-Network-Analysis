@@ -1,5 +1,4 @@
 using ONA.Graph.Application.Abstractions;
-using ONA.Graph.Application.Abstractions.Messaging;
 using ONA.Graph.Application.DTOs;
 using ONA.Graph.Domain.Exceptions;
 
@@ -10,12 +9,12 @@ namespace ONA.Graph.Application.Features.Boards.Commands;
 /// Draft -> Built. Throws GraphNotReadyForPublicationException for an empty graph.
 /// Forbidden transitions throw InvalidGraphStateTransitionException and nothing is saved.
 /// </summary>
-public sealed record BuildBoardGraphCommand(string BoardId) : ICommand<BoardDto>;
+public sealed record BuildBoardGraphCommand(string BoardId) : IRequest<BoardDto>;
 
 public sealed class BuildBoardGraphCommandHandler(IBoardRepository repository)
-    : ICommandHandler<BuildBoardGraphCommand, BoardDto>
+    : IRequestHandler<BuildBoardGraphCommand, BoardDto>
 {
-    public async Task<BoardDto> HandleAsync(
+    public async Task<BoardDto> Handle(
         BuildBoardGraphCommand command,
         CancellationToken cancellationToken = default)
     {

@@ -1,6 +1,6 @@
 using ONA.Insights.Application.Abstractions;
-using ONA.Insights.Application.Abstractions.Messaging;
 using ONA.Insights.Application.DTOs;
+using ONA.Insights.Application.Notifications;
 using ONA.Insights.Application.Ports;
 using ONA.Insights.Domain.Aggregates;
 using ONA.Insights.Domain.Exceptions;
@@ -11,18 +11,20 @@ namespace ONA.Insights.Application.Features.Recommendations.Commands;
 /// <summary>
 /// GenerateInsights + DeliverRecommendation: one recommendation per bottleneck of a Completed run.
 /// Idempotent: a bottleneck that already has a recommendation for this run keeps it.
+/// Publishes <see cref="RecommendationsGeneratedNotification"/> only when something new was saved.
 /// </summary>
 public sealed record GenerateRecommendationsCommand(string? AnalysisRunId)
-    : ICommand<IReadOnlyList<RecommendationDto>>;
+    : IRequest<IReadOnlyList<RecommendationDto>>;
 
 public sealed class GenerateRecommendationsCommandHandler(
     IRecommendationRepository repository,
     IAnalysisResultsPort analysisResults,
     IInsightGeneratorPort generator,
-    TimeProvider clock)
-    : ICommandHandler<GenerateRecommendationsCommand, IReadOnlyList<RecommendationDto>>
+    TimeProvider clock,
+    IPublisher notifications)
+    : IRequestHandler<GenerateRecommendationsCommand, IReadOnlyList<RecommendationDto>>
 {
-    public async Task<IReadOnlyList<RecommendationDto>> HandleAsync(
+    public async Task<IReadOnlyList<RecommendationDto>> Handle(
         GenerateRecommendationsCommand command,
         CancellationToken cancellationToken = default)
     {
@@ -85,8 +87,25 @@ public sealed class GenerateRecommendationsCommandHandler(
         if (created.Count > 0)
         {
             await repository.AddRangeAsync(created, cancellationToken);
+            await NotifyAsync(created, cancellationToken);
         }
 
         return result.Select(RecommendationDto.FromDomain).ToList();
+    }
+
+    /// <summary>Best-effort UI push: the recommendations are saved, a failing handler must not undo that.</summary>
+    private async Task NotifyAsync(IReadOnlyList<Recommendation> created, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var first = RecommendationDto.FromDomain(created[0]);
+            await notifications.Publish(
+                new RecommendationsGeneratedNotification(first.AnalysisRunId, first.BoardId, created.Count),
+                cancellationToken);
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Live updates are optional.
+        }
     }
 }

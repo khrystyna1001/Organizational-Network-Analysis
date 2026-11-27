@@ -1,16 +1,15 @@
 using ONA.Analysis.Application.Abstractions;
-using ONA.Analysis.Application.Abstractions.Messaging;
 using ONA.Analysis.Application.DTOs;
 
 namespace ONA.Analysis.Application.Features.AnalysisRuns.Queries;
 
 /// <summary>READ (single): no change tracking, returns a DTO or null.</summary>
-public sealed record GetAnalysisRunByIdQuery(string AnalysisRunId) : IQuery<AnalysisRunDto?>;
+public sealed record GetAnalysisRunByIdQuery(string AnalysisRunId) : IRequest<AnalysisRunDto?>;
 
 public sealed class GetAnalysisRunByIdQueryHandler(IAnalysisRunRepository repository)
-    : IQueryHandler<GetAnalysisRunByIdQuery, AnalysisRunDto?>
+    : IRequestHandler<GetAnalysisRunByIdQuery, AnalysisRunDto?>
 {
-    public async Task<AnalysisRunDto?> HandleAsync(
+    public async Task<AnalysisRunDto?> Handle(
         GetAnalysisRunByIdQuery query,
         CancellationToken cancellationToken = default)
     {
@@ -20,12 +19,12 @@ public sealed class GetAnalysisRunByIdQueryHandler(IAnalysisRunRepository reposi
 }
 
 /// <summary>READ (list): optionally filtered by board, newest first.</summary>
-public sealed record GetAnalysisRunsQuery(string? BoardId) : IQuery<IReadOnlyList<AnalysisRunDto>>;
+public sealed record GetAnalysisRunsQuery(string? BoardId) : IRequest<IReadOnlyList<AnalysisRunDto>>;
 
 public sealed class GetAnalysisRunsQueryHandler(IAnalysisRunRepository repository)
-    : IQueryHandler<GetAnalysisRunsQuery, IReadOnlyList<AnalysisRunDto>>
+    : IRequestHandler<GetAnalysisRunsQuery, IReadOnlyList<AnalysisRunDto>>
 {
-    public async Task<IReadOnlyList<AnalysisRunDto>> HandleAsync(
+    public async Task<IReadOnlyList<AnalysisRunDto>> Handle(
         GetAnalysisRunsQuery query,
         CancellationToken cancellationToken = default)
     {

@@ -1,4 +1,5 @@
 import { ApiError, call, roleOf, session } from "./api.js";
+import { Live } from "./live.js";
 import { BOTTLENECK, departmentColors, fitGraph, limitNodes, renderGraph, selectInGraph, suggestedLayout, zoomGraph } from "./graph.js";
 
 const $ = (id) => document.getElementById(id);
@@ -45,6 +46,14 @@ async function attempt(fn, success) {
   }
 }
 
+/** Disables a button and shows a spinner while its async action runs (the user sees that something is happening). */
+const busy = (action) => async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  button.classList.add("busy");
+  try { await action(); } finally { button.disabled = false; button.classList.remove("busy"); }
+};
+
 // ------------------------------------------------------------------ state
 const state = {
   boards: [], boardId: null, board: null,
@@ -52,10 +61,68 @@ const state = {
   byId: new Map(), metrics: new Map(), reportsOf: new Map(), bossOf: new Map(), ranked: [],
   selected: null, layout: "hierarchy", labels: "smart",
   search: "", sort: { key: "betweenness", dir: -1 }, watch: 0,
+  waiting: false,   // true after "Publish": the analysis and the recommendations are being produced in the background
 };
+
+// ------------------------------------------------------------------ live updates (SignalR)
+// The services push "something changed on this board"; the data is then re-read over the HTTP API.
+const LIVE_TEXT = { live: "Live", connecting: "Connecting…", offline: "Offline" };
+const LIVE_HINT = {
+  live: "Changes appear here as they happen.",
+  connecting: "Connecting to live updates…",
+  offline: "Live updates are off. Use Refresh to reload.",
+};
+
+function renderLive(status) {
+  $("live").dataset.state = status;
+  $("live").title = LIVE_HINT[status];
+  $("live-text").textContent = LIVE_TEXT[status];
+}
+
+let refreshTimer = 0;
+/** Several pushes can arrive together (analysis, then recommendations): reload once, then highlight what changed. */
+function refreshSoon(...panels) {
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(async () => {
+    await refresh({ quiet: true });
+    for (const id of panels) {
+      const panel = $(id);
+      panel.classList.remove("fresh");
+      void panel.offsetWidth;          // restart the CSS animation
+      panel.classList.add("fresh");
+    }
+  }, 250);
+}
+
+const onThisBoard = (message) => message.board_id === state.boardId;
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+const live = new Live({
+  analysisCompleted(message) {
+    if (!onThisBoard(message)) return;
+    if (state.waiting) toast(`Analysis finished – ${plural(message.bottleneck_count, "bottleneck")} found.`);
+    refreshSoon("kpis", "ranking");
+  },
+  recommendationsGenerated(message) {
+    if (!onThisBoard(message)) return;
+    if (state.waiting) toast(`${plural(message.count, "recommendation")} ready for your decision.`);
+    refreshSoon("recs");
+  },
+  recommendationResponded(message) {
+    if (onThisBoard(message)) refreshSoon("recs");
+  },
+  status(status) {
+    renderLive(status);
+    if (state.board) renderHeader();     // the Refresh button is only needed while updates are not live
+  },
+  resync() {
+    if (state.board) refresh({ quiet: true });   // events may have been missed while offline
+  },
+});
 
 // ------------------------------------------------------------------ auth screens
 function showAuth() {
+  live.stop();
   $("shell").hidden = true;
   $("auth").hidden = false;
 }
@@ -70,6 +137,7 @@ async function showApp() {
   document.querySelector("#profile-form [name=display_name]").value = s.user.display_name;
   $("admin-box").hidden = s.role !== "Admin";
   if (s.role === "Admin") loadUsers();
+  live.start();
   await loadBoards();
 }
 
@@ -264,6 +332,7 @@ async function loadBoards(selectId) {
   $("board-view").hidden = state.boards.length === 0;
   $("import-box").open = state.boards.length === 0;
   if (state.boardId) { select.value = state.boardId; state.selected = null; await loadBoard(); }
+  else live.joinBoard(null);
 }
 
 async function loadBoard({ quiet = false } = {}) {
@@ -285,6 +354,7 @@ async function loadBoard({ quiet = false } = {}) {
       for (const b of $("layout-seg").children) b.classList.toggle("on", b.dataset.v === state.layout);
     }
     Object.assign(state, { board, nodes, connections, analysis, recs });
+    live.joinBoard(board.id);
   } catch (err) {
     if (!quiet) toast(err.message, true);
     return;
@@ -315,17 +385,23 @@ function derive() {
   const b = (n) => state.metrics.get(n.id)?.betweenness ?? 0;
   state.ranked = [...state.nodes].sort((x, y) => b(y) - b(x) || x.name.localeCompare(y.name));
   if (!state.byId.has(state.selected)) state.selected = state.ranked[0]?.id ?? null;
+  // Done waiting once the analysis exists and its recommendations are there (or nothing needs one).
+  if (state.waiting && state.analysis && (state.recs.length > 0 || state.analysis.bottlenecks.length === 0)) state.waiting = false;
 }
 
-/** After publishing, Kafka triggers analysis and insights asynchronously: poll briefly. */
+/**
+ * After publishing, Kafka triggers the analysis and the recommendations in the background. While SignalR is live the
+ * pushes end the wait; without it we poll. Gives up after about 90 seconds so the spinner never runs forever.
+ */
 async function watchForResults() {
   const ticket = ++state.watch;
-  for (let i = 0; i < 20; i++) {
-    await sleep(2000);
+  for (let i = 0; i < 30 && state.waiting; i++) {
+    await sleep(3000);
     if (ticket !== state.watch) return;
-    await refresh({ quiet: true });
-    if (state.analysis && (state.recs.length > 0 || state.analysis.bottlenecks.length === 0)) return;
+    if (live.status !== "live") await refresh({ quiet: true });
   }
+  if (ticket !== state.watch) return;
+  if (state.waiting) { state.waiting = false; await refresh({ quiet: true }); }
 }
 
 // ------------------------------------------------------------------ rendering
@@ -349,28 +425,34 @@ function renderHeader() {
   $("stepper").replaceChildren(...steps.map((s, i) => h("li", { class: i < at ? "done" : i === at ? "current" : "", "aria-current": i === at ? "step" : false }, s)));
   $("board-meta").textContent = `${nodes.length} people · ${connections.length} reporting lines` +
     (published ? ` · version ${board.current_graph_version_id.slice(0, 8)}` : "");
-  $("board-note").textContent = !published
-    ? "Build and publish the board, then the analysis highlights communication bottlenecks."
-    : !analysis ? "Published. The analysis starts automatically – it will appear in a moment, or run it yourself." : "";
+  const note = state.waiting
+    ? (analysis ? "Analysis finished – writing recommendations…" : "Analysing the published graph…")
+    : !published ? "Build and publish the board, then the analysis highlights communication bottlenecks."
+    : !analysis ? "Published. The analysis starts automatically – or run it yourself." : "";
+  $("board-note").replaceChildren(...(state.waiting ? [h("span", { class: "spin", "aria-hidden": "true" })] : []), note);
 
   const act = (label, fn, ok, cls = "") =>
-    h("button", { class: `btn ${cls}`, type: "button", onclick: async () => { if (await attempt(fn, ok)) await refresh(); } }, label);
+    h("button", { class: `btn ${cls}`, type: "button", onclick: busy(async () => { if (await attempt(fn, ok)) await refresh(); }) }, label);
   const path = `/api/v1/boards/${board.id}`;
   const buttons = [];
   if (board.lifecycle === "Draft") buttons.push(act("Build graph", () => call("POST", `${path}/build`), "Graph built.", "primary"));
   if (board.lifecycle === "Built") {
-    buttons.push(h("button", { class: "btn primary", type: "button", onclick: async () => {
-      if (await attempt(() => call("POST", `${path}/publish`), "Published – analysis starts automatically.")) { await refresh(); watchForResults(); }
-    } }, "Publish"));
+    buttons.push(h("button", { class: "btn primary", type: "button", onclick: busy(async () => {
+      if (await attempt(() => call("POST", `${path}/publish`), "Published – analysis is running.")) {
+        state.waiting = true;
+        await refresh();
+        watchForResults();
+      }
+    }) }, "Publish"));
   }
   if (board.lifecycle === "Published") buttons.push(act("Archive", () => call("POST", `${path}/archive`), "Archived."));
-  buttons.push(h("button", { class: `btn ${published && !analysis ? "primary" : ""}`, type: "button", disabled: !published, onclick: async () => {
+  buttons.push(h("button", { class: `btn ${published && !analysis && !state.waiting ? "primary" : ""}`, type: "button", disabled: !published, onclick: busy(async () => {
     if (await attempt(() => call("POST", "/api/v1/analysis-runs", { json: { board_id: board.id } }), "Analysis complete.")) await refresh();
-  } }, "Run analysis"));
-  buttons.push(h("button", { class: "btn", type: "button", disabled: !analysis || analysis.status !== "Completed", onclick: async () => {
+  }) }, "Run analysis"));
+  buttons.push(h("button", { class: "btn", type: "button", disabled: !analysis || analysis.status !== "Completed", onclick: busy(async () => {
     if (await attempt(() => call("POST", "/api/v1/recommendations", { json: { analysis_run_id: analysis.id } }), "Insights generated.")) await refresh();
-  } }, "Insights"));
-  buttons.push(h("button", { class: "btn", type: "button", onclick: () => refresh() }, "↻ Refresh"));
+  }) }, "Insights"));
+  if (live.status !== "live") buttons.push(h("button", { class: "btn", type: "button", onclick: busy(() => refresh()) }, "↻ Refresh"));
   if (board.lifecycle !== "Published") {
     buttons.push(h("button", { class: "btn danger", type: "button", onclick: async () => {
       if (!confirm(`Delete board "${board.name}"?`)) return;
@@ -524,8 +606,8 @@ function renderRecs() {
       h("p", {}, r.content),
       r.status === "Delivered"
         ? [comment, h("div", { class: "btns" },
-          h("button", { class: "btn primary", type: "button", onclick: answer("approve") }, "Approve"),
-          h("button", { class: "btn", type: "button", onclick: answer("reject") }, "Reject"))]
+          h("button", { class: "btn primary", type: "button", onclick: busy(answer("approve")) }, "Approve"),
+          h("button", { class: "btn", type: "button", onclick: busy(answer("reject")) }, "Reject"))]
         : r.user_comment ? h("p", { class: "hint" }, `Comment: ${r.user_comment}`) : null);
   }));
 }

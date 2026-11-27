@@ -1,5 +1,4 @@
 using ONA.Identity.Application.Abstractions;
-using ONA.Identity.Application.Abstractions.Messaging;
 using ONA.Identity.Domain.ValueObjects;
 
 namespace ONA.Identity.Application.Features.Users.Commands;
@@ -8,11 +7,11 @@ public sealed class RequestPasswordResetCommandHandler(
     IUserRepository repository,
     IResetTokenGenerator tokens,
     IEmailSender email,
-    TimeProvider clock) : ICommandHandler<RequestPasswordResetCommand, bool>
+    TimeProvider clock) : IRequestHandler<RequestPasswordResetCommand, bool>
 {
     public static readonly TimeSpan TokenLifetime = TimeSpan.FromMinutes(30);
 
-    public async Task<bool> HandleAsync(RequestPasswordResetCommand command, CancellationToken cancellationToken = default)
+    public async Task<bool> Handle(RequestPasswordResetCommand command, CancellationToken cancellationToken = default)
     {
         if (!Email.TryCreate(command.Email, out var address))
         {

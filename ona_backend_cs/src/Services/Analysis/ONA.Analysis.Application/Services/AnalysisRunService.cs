@@ -1,5 +1,6 @@
 using ONA.Analysis.Application.Abstractions;
 using ONA.Analysis.Application.Events;
+using ONA.Analysis.Application.Notifications;
 using ONA.Analysis.Application.Ports;
 using ONA.Analysis.Domain.Aggregates;
 using ONA.Analysis.Domain.Entities;
@@ -10,13 +11,15 @@ namespace ONA.Analysis.Application.Services;
 
 /// <summary>
 /// Shared use-case logic for "run an analysis on the published graph of a board":
-/// read snapshot -> calculate -> save -> publish <see cref="AnalysisCompleted"/>.
+/// read snapshot -> calculate -> save -> publish <see cref="AnalysisCompleted"/> (Kafka) and
+/// <see cref="AnalysisRunCompletedNotification"/> (MediatR, pushed to browsers by SignalR).
 /// Used by the HTTP command and by the Kafka-triggered command.
 /// </summary>
 public sealed class AnalysisRunService(
     IAnalysisRunRepository repository,
     IGraphSnapshotPort graphSnapshotPort,
     IAnalysisEventPublisher eventPublisher,
+    IPublisher notifications,
     TimeProvider timeProvider)
 {
     private readonly NetworkMetricsCalculator _calculator = new();
@@ -71,6 +74,7 @@ public sealed class AnalysisRunService(
 
         await repository.AddAsync(run, cancellationToken);
         await PublishCompletedAsync(run, cancellationToken);
+        await NotifyCompletedAsync(run, cancellationToken);
         return run;
     }
 
@@ -91,6 +95,21 @@ public sealed class AnalysisRunService(
         {
             // The run is already saved; the transport adapter has logged the failure.
             // A lost event must never turn a successful analysis into an error.
+        }
+    }
+
+    /// <summary>Best-effort UI push: a notification handler failure never fails a saved run.</summary>
+    private async Task NotifyCompletedAsync(AnalysisRun run, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await notifications.Publish(
+                new AnalysisRunCompletedNotification(run.Id, run.BoardId, run.GraphVersionId, run.Bottlenecks.Count),
+                cancellationToken);
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            // The run is saved and the event is published; live updates are optional.
         }
     }
 }

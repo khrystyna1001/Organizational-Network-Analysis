@@ -1,5 +1,4 @@
 using ONA.Graph.Application.Abstractions;
-using ONA.Graph.Application.Abstractions.Messaging;
 using ONA.Graph.Application.DTOs;
 using ONA.Graph.Domain.Exceptions;
 
@@ -13,12 +12,12 @@ public sealed record RenameBoardCommand(
     string BoardId,
     string? Name,
     string? Description,
-    bool DescriptionSpecified) : ICommand<BoardDto>;
+    bool DescriptionSpecified) : IRequest<BoardDto>;
 
 public sealed class RenameBoardCommandHandler(IBoardRepository repository)
-    : ICommandHandler<RenameBoardCommand, BoardDto>
+    : IRequestHandler<RenameBoardCommand, BoardDto>
 {
-    public async Task<BoardDto> HandleAsync(
+    public async Task<BoardDto> Handle(
         RenameBoardCommand command,
         CancellationToken cancellationToken = default)
     {

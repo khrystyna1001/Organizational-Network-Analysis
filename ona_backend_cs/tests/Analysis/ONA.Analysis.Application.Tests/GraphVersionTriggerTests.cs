@@ -11,13 +11,14 @@ public sealed class GraphVersionTriggerTests
     private readonly InMemoryAnalysisRunRepository _repository = new();
     private readonly FakeGraphSnapshotPort _port = new();
     private readonly FakeEventPublisher _publisher = new();
+    private readonly RecordingPublisher _notifications = new();
 
     private static GraphSnapshot Chain(string boardId, string version = "v1") =>
         new(boardId, version,
             [new SnapshotNode("a", "Ann"), new SnapshotNode("b", "Bob"), new SnapshotNode("c", "Cid")],
             [new SnapshotConnection("a", "b", 1), new SnapshotConnection("b", "c", 1)]);
 
-    private AnalysisRunService Service() => new(_repository, _port, _publisher, TimeProvider.System);
+    private AnalysisRunService Service() => new(_repository, _port, _publisher, _notifications, TimeProvider.System);
 
     private StartAnalysisForGraphVersionCommandHandler TriggerHandler() => new(Service());
 
@@ -26,7 +27,7 @@ public sealed class GraphVersionTriggerTests
     {
         _port.Handler = id => Chain(id);
 
-        var outcome = await TriggerHandler().HandleAsync(new StartAnalysisForGraphVersionCommand("board-1", "v1"));
+        var outcome = await TriggerHandler().Handle(new StartAnalysisForGraphVersionCommand("board-1", "v1"), default);
 
         var run = Assert.Single(_repository.Runs);
         Assert.Equal(GraphVersionAnalysisOutcome.Analyzed, outcome.Status);
@@ -40,9 +41,9 @@ public sealed class GraphVersionTriggerTests
     public async Task SecondDeliveryOfSameGraphVersion_IsNoOp()
     {
         _port.Handler = id => Chain(id);
-        await TriggerHandler().HandleAsync(new StartAnalysisForGraphVersionCommand("board-1", "v1"));
+        await TriggerHandler().Handle(new StartAnalysisForGraphVersionCommand("board-1", "v1"), default);
 
-        var outcome = await TriggerHandler().HandleAsync(new StartAnalysisForGraphVersionCommand("board-1", "v1"));
+        var outcome = await TriggerHandler().Handle(new StartAnalysisForGraphVersionCommand("board-1", "v1"), default);
 
         Assert.Equal(GraphVersionAnalysisOutcome.AlreadyAnalyzed, outcome.Status);
         Assert.Single(_repository.Runs);
@@ -53,9 +54,9 @@ public sealed class GraphVersionTriggerTests
     public async Task EventForOlderVersion_WhenCurrentVersionAlreadyAnalyzed_IsNoOp()
     {
         _port.Handler = id => Chain(id, "v2");
-        await TriggerHandler().HandleAsync(new StartAnalysisForGraphVersionCommand("board-1", "v2"));
+        await TriggerHandler().Handle(new StartAnalysisForGraphVersionCommand("board-1", "v2"), default);
 
-        var outcome = await TriggerHandler().HandleAsync(new StartAnalysisForGraphVersionCommand("board-1", "v1"));
+        var outcome = await TriggerHandler().Handle(new StartAnalysisForGraphVersionCommand("board-1", "v1"), default);
 
         Assert.Equal(GraphVersionAnalysisOutcome.AlreadyAnalyzed, outcome.Status);
         Assert.Single(_repository.Runs);
@@ -66,7 +67,7 @@ public sealed class GraphVersionTriggerTests
     {
         _port.Handler = id => throw new GraphNotPublishedException(id);
 
-        var outcome = await TriggerHandler().HandleAsync(new StartAnalysisForGraphVersionCommand("board-1", "v1"));
+        var outcome = await TriggerHandler().Handle(new StartAnalysisForGraphVersionCommand("board-1", "v1"), default);
 
         Assert.Equal(GraphVersionAnalysisOutcome.Skipped, outcome.Status);
         Assert.Contains("analysis_run.graph_not_published", outcome.Reason);
@@ -80,7 +81,7 @@ public sealed class GraphVersionTriggerTests
         _port.Handler = _ => throw new GraphIntegrationException("graph down");
 
         await Assert.ThrowsAsync<GraphIntegrationException>(
-            () => TriggerHandler().HandleAsync(new StartAnalysisForGraphVersionCommand("board-1", "v1")));
+            () => TriggerHandler().Handle(new StartAnalysisForGraphVersionCommand("board-1", "v1"), default));
 
         Assert.Empty(_repository.Runs);
     }
@@ -91,7 +92,7 @@ public sealed class GraphVersionTriggerTests
         _port.Handler = id => Chain(id);
         _publisher.ThrowOnPublish = true;
 
-        var outcome = await TriggerHandler().HandleAsync(new StartAnalysisForGraphVersionCommand("board-1", "v1"));
+        var outcome = await TriggerHandler().Handle(new StartAnalysisForGraphVersionCommand("board-1", "v1"), default);
 
         Assert.Equal(GraphVersionAnalysisOutcome.Analyzed, outcome.Status);
         Assert.Single(_repository.Runs);
@@ -102,7 +103,7 @@ public sealed class GraphVersionTriggerTests
     {
         _port.Handler = id => Chain(id);
 
-        var dto = await new StartAnalysisRunCommandHandler(Service()).HandleAsync(new StartAnalysisRunCommand("board-1"));
+        var dto = await new StartAnalysisRunCommandHandler(Service()).Handle(new StartAnalysisRunCommand("board-1"), default);
 
         var published = Assert.Single(_publisher.Published);
         Assert.Equal(dto.Id, published.AnalysisRunId);
@@ -114,7 +115,7 @@ public sealed class GraphVersionTriggerTests
         _port.Handler = id => Chain(id);
         _publisher.ThrowOnPublish = true;
 
-        var dto = await new StartAnalysisRunCommandHandler(Service()).HandleAsync(new StartAnalysisRunCommand("board-1"));
+        var dto = await new StartAnalysisRunCommandHandler(Service()).Handle(new StartAnalysisRunCommand("board-1"), default);
 
         Assert.Equal("Completed", dto.Status);
     }

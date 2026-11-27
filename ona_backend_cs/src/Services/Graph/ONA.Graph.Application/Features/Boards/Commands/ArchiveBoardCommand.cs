@@ -1,5 +1,4 @@
 using ONA.Graph.Application.Abstractions;
-using ONA.Graph.Application.Abstractions.Messaging;
 using ONA.Graph.Application.DTOs;
 using ONA.Graph.Domain.Exceptions;
 
@@ -10,12 +9,12 @@ namespace ONA.Graph.Application.Features.Boards.Commands;
 /// Published -> Archived (terminal state).
 /// Forbidden transitions throw InvalidGraphStateTransitionException and nothing is saved.
 /// </summary>
-public sealed record ArchiveBoardCommand(string BoardId) : ICommand<BoardDto>;
+public sealed record ArchiveBoardCommand(string BoardId) : IRequest<BoardDto>;
 
 public sealed class ArchiveBoardCommandHandler(IBoardRepository repository)
-    : ICommandHandler<ArchiveBoardCommand, BoardDto>
+    : IRequestHandler<ArchiveBoardCommand, BoardDto>
 {
-    public async Task<BoardDto> HandleAsync(
+    public async Task<BoardDto> Handle(
         ArchiveBoardCommand command,
         CancellationToken cancellationToken = default)
     {

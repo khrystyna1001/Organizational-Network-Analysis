@@ -19,7 +19,7 @@ public sealed class GraphSnapshotQueryTests
         var versionId = board.PublishGraphVersion();
 
         var result = await new GetGraphSnapshotQueryHandler(_repository)
-            .HandleAsync(new GetGraphSnapshotQuery("b1"));
+            .Handle(new GetGraphSnapshotQuery("b1"), default);
 
         Assert.Equal(versionId, result.GraphVersionId);
         Assert.Equal(2, result.Nodes.Count);
@@ -34,7 +34,7 @@ public sealed class GraphSnapshotQueryTests
         _repository.Seed(new Board("b1", "Engineering", null)).AddNode("Alex", "Director", "Engineering");
 
         var exception = await Assert.ThrowsAsync<BoardNotPublishedException>(
-            () => new GetGraphSnapshotQueryHandler(_repository).HandleAsync(new GetGraphSnapshotQuery("b1")));
+            () => new GetGraphSnapshotQueryHandler(_repository).Handle(new GetGraphSnapshotQuery("b1"), default));
 
         Assert.Equal("board.graph_not_published", exception.Code);
     }
@@ -43,7 +43,7 @@ public sealed class GraphSnapshotQueryTests
     public async Task Snapshot_OfUnknownBoard_ThrowsNotFound()
     {
         var exception = await Assert.ThrowsAsync<BoardNotFoundException>(
-            () => new GetGraphSnapshotQueryHandler(_repository).HandleAsync(new GetGraphSnapshotQuery("nope")));
+            () => new GetGraphSnapshotQueryHandler(_repository).Handle(new GetGraphSnapshotQuery("nope"), default));
 
         Assert.Equal("board.not_found", exception.Code);
     }

@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using ONA.Analysis.Application.Abstractions.Messaging;
 using ONA.Analysis.Application.DTOs;
 using ONA.Analysis.Application.Features.AnalysisRuns.Commands;
 using ONA.Analysis.Application.Features.AnalysisRuns.Queries;
@@ -21,10 +20,10 @@ public sealed class AnalysisRunsController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status502BadGateway)]
     public async Task<ActionResult<AnalysisRunDto>> StartAnalysisRun(
         StartAnalysisRunRequest request,
-        [FromServices] ICommandHandler<StartAnalysisRunCommand, AnalysisRunDto> handler,
+        [FromServices] ISender sender,
         CancellationToken cancellationToken)
     {
-        var run = await handler.HandleAsync(new StartAnalysisRunCommand(request.BoardId ?? string.Empty), cancellationToken);
+        var run = await sender.Send(new StartAnalysisRunCommand(request.BoardId ?? string.Empty), cancellationToken);
         return CreatedAtAction(nameof(GetAnalysisRun), new { analysisRunId = run.Id }, run);
     }
 
@@ -32,19 +31,19 @@ public sealed class AnalysisRunsController : ControllerBase
     [ProducesResponseType<IReadOnlyList<AnalysisRunDto>>(StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<AnalysisRunDto>>> GetAnalysisRuns(
         [FromQuery(Name = "board_id")] string? boardId,
-        [FromServices] IQueryHandler<GetAnalysisRunsQuery, IReadOnlyList<AnalysisRunDto>> handler,
+        [FromServices] ISender sender,
         CancellationToken cancellationToken) =>
-        Ok(await handler.HandleAsync(new GetAnalysisRunsQuery(boardId), cancellationToken));
+        Ok(await sender.Send(new GetAnalysisRunsQuery(boardId), cancellationToken));
 
     [HttpGet("{analysisRunId}", Name = nameof(GetAnalysisRun))]
     [ProducesResponseType<AnalysisRunDto>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<AnalysisRunDto>> GetAnalysisRun(
         string analysisRunId,
-        [FromServices] IQueryHandler<GetAnalysisRunByIdQuery, AnalysisRunDto?> handler,
+        [FromServices] ISender sender,
         CancellationToken cancellationToken)
     {
-        var run = await handler.HandleAsync(new GetAnalysisRunByIdQuery(analysisRunId), cancellationToken);
+        var run = await sender.Send(new GetAnalysisRunByIdQuery(analysisRunId), cancellationToken);
         return run is null
             ? Problem(statusCode: StatusCodes.Status404NotFound, title: "Analysis run not found")
             : Ok(run);

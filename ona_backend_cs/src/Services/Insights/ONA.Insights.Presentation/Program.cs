@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using ONA.Insights.Infrastructure;
+using ONA.Insights.Presentation.Hubs;
 using ONA.Insights.Presentation.Middleware;
 using Scalar.AspNetCore;
 
@@ -24,6 +25,12 @@ builder.Services.AddInfrastructure(provider =>
         "Connection string 'Insights' is not configured. Set ConnectionStrings__Insights or use User Secrets."));
 
 builder.Services.AddAnalysisCompletedConsumer(builder.Configuration);
+
+// Live updates: SignalR (hub /hubs/insights) fed by MediatR notifications published in the Application layer.
+// JSON like the HTTP API (snake_case). The Application assembly is registered by AddInfrastructure.
+builder.Services.AddSignalR().AddJsonProtocol(options =>
+    options.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);
+builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssemblyContaining<InsightsHub>());
 
 // Shared JWT contract (HS256): Jwt:Key / Jwt:Issuer / Jwt:Audience, issued by Identity.
 var jwtKey = builder.Configuration["Jwt:Key"];
@@ -48,6 +55,21 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             RoleClaimType = "role",
             NameClaimType = "sub"
         };
+
+        // Browsers cannot send an Authorization header on a WebSocket: SignalR passes the token in the query string.
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var token = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(token) && context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = token;
+                }
+
+                return Task.CompletedTask;
+            }
+        };
     });
 builder.Services.AddAuthorization();
 
@@ -70,6 +92,7 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<InsightsHub>(InsightsHub.Path);
 
 app.Run();
 

@@ -1,5 +1,4 @@
 using ONA.Identity.Application.Abstractions;
-using ONA.Identity.Application.Abstractions.Messaging;
 using ONA.Identity.Application.DTOs;
 using ONA.Identity.Domain.Exceptions;
 using ONA.Identity.Domain.ValueObjects;
@@ -7,9 +6,9 @@ using ONA.Identity.Domain.ValueObjects;
 namespace ONA.Identity.Application.Features.Users.Commands;
 
 public sealed class ChangeUserRoleCommandHandler(IUserRepository repository)
-    : ICommandHandler<ChangeUserRoleCommand, UserDto>
+    : IRequestHandler<ChangeUserRoleCommand, UserDto>
 {
-    public async Task<UserDto> HandleAsync(ChangeUserRoleCommand command, CancellationToken cancellationToken = default)
+    public async Task<UserDto> Handle(ChangeUserRoleCommand command, CancellationToken cancellationToken = default)
     {
         if (!Enum.TryParse<UserRole>(command.Role, ignoreCase: true, out var role)
             || !Enum.IsDefined(role)

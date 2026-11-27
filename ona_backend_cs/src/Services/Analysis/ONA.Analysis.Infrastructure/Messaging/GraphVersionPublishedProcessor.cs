@@ -1,6 +1,6 @@
+using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using ONA.Analysis.Application.Abstractions.Messaging;
 using ONA.Analysis.Application.Features.AnalysisRuns.Commands;
 using ONA.Analysis.Infrastructure.Acl.Events;
 
@@ -25,9 +25,9 @@ internal sealed class GraphVersionPublishedProcessor(
         try
         {
             await using var scope = scopeFactory.CreateAsyncScope();
-            var handler = scope.ServiceProvider
-                .GetRequiredService<ICommandHandler<StartAnalysisForGraphVersionCommand, GraphVersionAnalysisOutcome>>();
-            var outcome = await handler.HandleAsync(
+            // Through the mediator (not the handler) so pipeline behaviors apply to Kafka-triggered work too.
+            var sender = scope.ServiceProvider.GetRequiredService<ISender>();
+            var outcome = await sender.Send(
                 new StartAnalysisForGraphVersionCommand(message.BoardId, message.GraphVersionId),
                 cancellationToken);
 

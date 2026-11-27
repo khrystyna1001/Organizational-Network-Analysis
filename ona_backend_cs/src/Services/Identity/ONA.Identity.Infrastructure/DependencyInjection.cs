@@ -3,10 +3,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ONA.Identity.Application.Abstractions;
-using ONA.Identity.Application.Abstractions.Messaging;
 using ONA.Identity.Application.DTOs;
 using ONA.Identity.Application.Features.Users.Commands;
 using ONA.Identity.Application.Features.Users.Queries;
+using ONA.Identity.Infrastructure.Behaviors;
 using ONA.Identity.Infrastructure.Notifications;
 using ONA.Identity.Infrastructure.Persistence;
 using ONA.Identity.Infrastructure.Persistence.Repositories;
@@ -46,20 +46,15 @@ public static class DependencyInjection
         return services.AddIdentityApplication();
     }
 
-    /// <summary>Registers CQRS handlers explicitly (no mediator library).</summary>
+    /// <summary>Discovers CQRS handlers via MediatR and adds the logging pipeline behavior.</summary>
     public static IServiceCollection AddIdentityApplication(this IServiceCollection services)
     {
-        services.AddScoped<ICommandHandler<RegisterUserCommand, UserDto>, RegisterUserCommandHandler>();
-        services.AddScoped<ICommandHandler<AuthenticateUserCommand, LoginResultDto>, AuthenticateUserCommandHandler>();
-        services.AddScoped<ICommandHandler<RequestPasswordResetCommand, bool>, RequestPasswordResetCommandHandler>();
-        services.AddScoped<ICommandHandler<ConfirmPasswordResetCommand, bool>, ConfirmPasswordResetCommandHandler>();
-        services.AddScoped<ICommandHandler<ChangePasswordCommand, bool>, ChangePasswordCommandHandler>();
-        services.AddScoped<ICommandHandler<ChangeUserRoleCommand, UserDto>, ChangeUserRoleCommandHandler>();
-        services.AddScoped<ICommandHandler<EnsureAdminUserCommand, bool>, EnsureAdminUserCommandHandler>();
-        services.AddScoped<ICommandHandler<UpdateUserCommand, UserDto>, UpdateUserCommandHandler>();
-
-        services.AddScoped<IQueryHandler<GetUserByIdQuery, UserDto?>, GetUserByIdQueryHandler>();
-        services.AddScoped<IQueryHandler<GetAllUsersQuery, IReadOnlyList<UserDto>>, GetAllUsersQueryHandler>();
+        services.AddLogging();
+        services.AddMediatR(cfg =>
+        {
+            cfg.RegisterServicesFromAssemblyContaining<IUserRepository>();
+            cfg.AddOpenBehavior(typeof(RequestLoggingBehavior<,>));
+        });
         return services;
     }
 
@@ -73,8 +68,8 @@ public static class DependencyInjection
         var admin = scope.ServiceProvider.GetRequiredService<IConfiguration>().GetSection("Admin");
         if (!string.IsNullOrWhiteSpace(admin["Email"]))
         {
-            var seed = scope.ServiceProvider.GetRequiredService<ICommandHandler<EnsureAdminUserCommand, bool>>();
-            var created = await seed.HandleAsync(
+            var seed = scope.ServiceProvider.GetRequiredService<ISender>();
+            var created = await seed.Send(
                 new EnsureAdminUserCommand(admin["Email"], admin["Password"], admin["DisplayName"]));
             scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("ONA.Identity.Seed")
                 .LogInformation("Admin seed {Email}: {Result}", admin["Email"], created ? "created" : "already exists");

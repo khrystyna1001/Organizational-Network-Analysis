@@ -1,16 +1,15 @@
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ONA.Insights.Application.Abstractions;
-using ONA.Insights.Application.Abstractions.Messaging;
-using ONA.Insights.Application.DTOs;
-using ONA.Insights.Application.Features.Recommendations.Commands;
 using ONA.Insights.Application.Features.Recommendations.Events;
 using ONA.Insights.Application.Features.Recommendations.Queries;
 using ONA.Insights.Application.Ports;
 using ONA.Insights.Infrastructure.Acl;
 using ONA.Insights.Infrastructure.Auth;
+using ONA.Insights.Infrastructure.Behaviors;
 using ONA.Insights.Infrastructure.Generation;
 using ONA.Insights.Infrastructure.Messaging;
 using ONA.Insights.Infrastructure.Persistence;
@@ -63,18 +62,22 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>Registers CQRS handlers explicitly (no mediator library).</summary>
+    /// <summary>
+    /// Registers application services, discovers CQRS handlers and notification handlers of the Application
+    /// assembly via MediatR and adds the logging pipeline behavior. The Presentation assembly registers
+    /// its own notification handlers (SignalR push) with a second <c>AddMediatR</c> call.
+    /// </summary>
     public static IServiceCollection AddInsightsApplication(this IServiceCollection services)
     {
+        services.AddLogging();
         services.AddSingleton(TimeProvider.System);
+        services.AddMediatR(cfg =>
+        {
+            cfg.RegisterServicesFromAssemblyContaining<IRecommendationRepository>();
+            cfg.AddOpenBehavior(typeof(RequestLoggingBehavior<,>));
+        });
 
-        services.AddScoped<ICommandHandler<GenerateRecommendationsCommand, IReadOnlyList<RecommendationDto>>, GenerateRecommendationsCommandHandler>();
-        services.AddScoped<ICommandHandler<RespondToRecommendationCommand, RecommendationDto>, RespondToRecommendationCommandHandler>();
-
-        services.AddScoped<IQueryHandler<GetRecommendationByIdQuery, RecommendationDto?>, GetRecommendationByIdQueryHandler>();
         services.AddScoped<AnalysisCompletedMessageHandler>();
-
-        services.AddScoped<IQueryHandler<GetRecommendationsQuery, IReadOnlyList<RecommendationDto>>, GetRecommendationsQueryHandler>();
 
         return services;
     }

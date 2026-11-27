@@ -1,3 +1,4 @@
+using MediatR;
 using ONA.Analysis.Application.Abstractions;
 using ONA.Analysis.Application.Events;
 using ONA.Analysis.Application.Ports;
@@ -47,6 +48,29 @@ internal sealed class FakeEventPublisher : IAnalysisEventPublisher
         }
 
         Published.Add(@event);
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>Records MediatR notifications instead of dispatching them (no SignalR in Application tests).</summary>
+internal sealed class RecordingPublisher : IPublisher
+{
+    public List<object> Published { get; } = [];
+    public bool ThrowOnPublish { get; set; }
+
+    public Task Publish(object notification, CancellationToken cancellationToken = default) => Record(notification);
+
+    public Task Publish<TNotification>(TNotification notification, CancellationToken cancellationToken = default)
+        where TNotification : INotification => Record(notification);
+
+    private Task Record(object notification)
+    {
+        if (ThrowOnPublish)
+        {
+            throw new InvalidOperationException("signalr down");
+        }
+
+        Published.Add(notification);
         return Task.CompletedTask;
     }
 }

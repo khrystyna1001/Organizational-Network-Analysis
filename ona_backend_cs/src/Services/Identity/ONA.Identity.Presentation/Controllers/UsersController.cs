@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using ONA.Identity.Application.Abstractions.Messaging;
 using ONA.Identity.Application.DTOs;
 using ONA.Identity.Application.Features.Users.Commands;
 using ONA.Identity.Application.Features.Users.Queries;
@@ -23,10 +22,10 @@ public sealed class UsersController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<UserDto>> Register(
         RegisterUserRequest request,
-        [FromServices] ICommandHandler<RegisterUserCommand, UserDto> handler,
+        [FromServices] ISender sender,
         CancellationToken cancellationToken)
     {
-        var user = await handler.HandleAsync(
+        var user = await sender.Send(
             new RegisterUserCommand(request.Email, request.DisplayName, request.Password), cancellationToken);
         return Created($"/api/v1/users/{user.Id}", user);
     }
@@ -36,19 +35,19 @@ public sealed class UsersController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<LoginResultDto>> Login(
         LoginRequest request,
-        [FromServices] ICommandHandler<AuthenticateUserCommand, LoginResultDto> handler,
+        [FromServices] ISender sender,
         CancellationToken cancellationToken) =>
-        Ok(await handler.HandleAsync(new AuthenticateUserCommand(request.Email, request.Password), cancellationToken));
+        Ok(await sender.Send(new AuthenticateUserCommand(request.Email, request.Password), cancellationToken));
 
     /// <summary>Always 202, whether or not the email is registered (no user enumeration).</summary>
     [HttpPost("password-reset/request"), AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     public async Task<IActionResult> RequestPasswordReset(
         PasswordResetRequest request,
-        [FromServices] ICommandHandler<RequestPasswordResetCommand, bool> handler,
+        [FromServices] ISender sender,
         CancellationToken cancellationToken)
     {
-        await handler.HandleAsync(new RequestPasswordResetCommand(request.Email), cancellationToken);
+        await sender.Send(new RequestPasswordResetCommand(request.Email), cancellationToken);
         return Accepted();
     }
 
@@ -57,10 +56,10 @@ public sealed class UsersController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> ConfirmPasswordReset(
         ConfirmPasswordResetRequest request,
-        [FromServices] ICommandHandler<ConfirmPasswordResetCommand, bool> handler,
+        [FromServices] ISender sender,
         CancellationToken cancellationToken)
     {
-        await handler.HandleAsync(
+        await sender.Send(
             new ConfirmPasswordResetCommand(request.Email, request.Token, request.NewPassword), cancellationToken);
         return NoContent();
     }
@@ -71,10 +70,10 @@ public sealed class UsersController : ControllerBase
     [ProducesResponseType<UserDto>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<UserDto>> GetMe(
-        [FromServices] IQueryHandler<GetUserByIdQuery, UserDto?> handler,
+        [FromServices] ISender sender,
         CancellationToken cancellationToken)
     {
-        var user = await handler.HandleAsync(new GetUserByIdQuery(CallerId), cancellationToken);
+        var user = await sender.Send(new GetUserByIdQuery(CallerId), cancellationToken);
         return user is null ? Problem(statusCode: StatusCodes.Status404NotFound, title: "User not found") : Ok(user);
     }
 
@@ -83,9 +82,9 @@ public sealed class UsersController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<UserDto>> UpdateMe(
         UpdateUserRequest request,
-        [FromServices] ICommandHandler<UpdateUserCommand, UserDto> handler,
+        [FromServices] ISender sender,
         CancellationToken cancellationToken) =>
-        Ok(await handler.HandleAsync(new UpdateUserCommand(CallerId, request.DisplayName), cancellationToken));
+        Ok(await sender.Send(new UpdateUserCommand(CallerId, request.DisplayName), cancellationToken));
 
     [HttpPost("me/password"), Authorize]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -93,10 +92,10 @@ public sealed class UsersController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> ChangeMyPassword(
         ChangePasswordRequest request,
-        [FromServices] ICommandHandler<ChangePasswordCommand, bool> handler,
+        [FromServices] ISender sender,
         CancellationToken cancellationToken)
     {
-        await handler.HandleAsync(
+        await sender.Send(
             new ChangePasswordCommand(CallerId, request.CurrentPassword, request.NewPassword), cancellationToken);
         return NoContent();
     }
@@ -106,19 +105,19 @@ public sealed class UsersController : ControllerBase
     [HttpGet, Authorize(Roles = "Admin")]
     [ProducesResponseType<IReadOnlyList<UserDto>>(StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<UserDto>>> GetUsers(
-        [FromServices] IQueryHandler<GetAllUsersQuery, IReadOnlyList<UserDto>> handler,
+        [FromServices] ISender sender,
         CancellationToken cancellationToken) =>
-        Ok(await handler.HandleAsync(new GetAllUsersQuery(), cancellationToken));
+        Ok(await sender.Send(new GetAllUsersQuery(), cancellationToken));
 
     [HttpGet("{userId}"), Authorize(Roles = "Admin")]
     [ProducesResponseType<UserDto>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<UserDto>> GetUser(
         string userId,
-        [FromServices] IQueryHandler<GetUserByIdQuery, UserDto?> handler,
+        [FromServices] ISender sender,
         CancellationToken cancellationToken)
     {
-        var user = await handler.HandleAsync(new GetUserByIdQuery(userId), cancellationToken);
+        var user = await sender.Send(new GetUserByIdQuery(userId), cancellationToken);
         return user is null ? Problem(statusCode: StatusCodes.Status404NotFound, title: "User not found") : Ok(user);
     }
 
@@ -129,7 +128,7 @@ public sealed class UsersController : ControllerBase
     public async Task<ActionResult<UserDto>> ChangeRole(
         string userId,
         ChangeRoleRequest request,
-        [FromServices] ICommandHandler<ChangeUserRoleCommand, UserDto> handler,
+        [FromServices] ISender sender,
         CancellationToken cancellationToken) =>
-        Ok(await handler.HandleAsync(new ChangeUserRoleCommand(CallerId, userId, request.Role), cancellationToken));
+        Ok(await sender.Send(new ChangeUserRoleCommand(CallerId, userId, request.Role), cancellationToken));
 }

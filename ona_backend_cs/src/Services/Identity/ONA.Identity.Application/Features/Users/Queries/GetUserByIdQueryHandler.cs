@@ -1,14 +1,13 @@
 using ONA.Identity.Application.Abstractions;
-using ONA.Identity.Application.Abstractions.Messaging;
 using ONA.Identity.Application.DTOs;
 using ONA.Identity.Domain.ValueObjects;
 
 namespace ONA.Identity.Application.Features.Users.Queries;
 
 public sealed class GetUserByIdQueryHandler(IUserRepository repository)
-    : IQueryHandler<GetUserByIdQuery, UserDto?>
+    : IRequestHandler<GetUserByIdQuery, UserDto?>
 {
-    public async Task<UserDto?> HandleAsync(GetUserByIdQuery query, CancellationToken cancellationToken = default)
+    public async Task<UserDto?> Handle(GetUserByIdQuery query, CancellationToken cancellationToken = default)
     {
         if (!UserId.TryParse(query.UserId, out var id))
         {

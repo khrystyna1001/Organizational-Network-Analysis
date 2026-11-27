@@ -3,13 +3,13 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ONA.Graph.Application.Abstractions;
-using ONA.Graph.Application.Abstractions.Messaging;
 using ONA.Graph.Application.DTOs;
 using ONA.Graph.Application.Features.Boards.Commands;
 using ONA.Graph.Application.Features.Boards.Queries;
 using ONA.Graph.Application.Ports;
 using ONA.Graph.Application.Services;
 using ONA.Graph.Infrastructure.Acl;
+using ONA.Graph.Infrastructure.Behaviors;
 using ONA.Graph.Infrastructure.Messaging;
 using ONA.Graph.Infrastructure.Persistence;
 using ONA.Graph.Infrastructure.Persistence.Repositories;
@@ -60,23 +60,19 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>Registers application services and CQRS handlers explicitly (no mediator library).</summary>
+    /// <summary>
+    /// Registers <see cref="IGraphService"/> (shared node/connection logic used by the node and connection
+    /// handlers), discovers all CQRS handlers via MediatR and adds the logging pipeline behavior.
+    /// </summary>
     public static IServiceCollection AddGraphApplication(this IServiceCollection services)
     {
+        services.AddLogging();
         services.AddScoped<IGraphService, GraphService>();
-
-        services.AddScoped<ICommandHandler<CreateBoardCommand, BoardDto>, CreateBoardCommandHandler>();
-        services.AddScoped<ICommandHandler<RenameBoardCommand, BoardDto>, RenameBoardCommandHandler>();
-        services.AddScoped<ICommandHandler<BuildBoardGraphCommand, BoardDto>, BuildBoardGraphCommandHandler>();
-        services.AddScoped<ICommandHandler<PublishBoardCommand, BoardDto>, PublishBoardCommandHandler>();
-        services.AddScoped<ICommandHandler<ArchiveBoardCommand, BoardDto>, ArchiveBoardCommandHandler>();
-        services.AddScoped<ICommandHandler<DeleteBoardCommand, bool>, DeleteBoardCommandHandler>();
-        services.AddScoped<ICommandHandler<ImportBoardFromHrisCommand, ImportedBoardDto>, ImportBoardFromHrisCommandHandler>();
-
-        services.AddScoped<IQueryHandler<GetBoardByIdQuery, BoardDto?>, GetBoardByIdQueryHandler>();
-        services.AddScoped<IQueryHandler<GetAllBoardsQuery, IReadOnlyList<BoardDto>>, GetAllBoardsQueryHandler>();
-        services.AddScoped<IQueryHandler<GetGraphSnapshotQuery, GraphSnapshotDto>, GetGraphSnapshotQueryHandler>();
-        services.AddScoped<IQueryHandler<PreviewCsvQuery, CsvPreview>, PreviewCsvQueryHandler>();
+        services.AddMediatR(cfg =>
+        {
+            cfg.RegisterServicesFromAssemblyContaining<IBoardRepository>();
+            cfg.AddOpenBehavior(typeof(RequestLoggingBehavior<,>));
+        });
 
         return services;
     }
